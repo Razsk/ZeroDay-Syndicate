@@ -1,0 +1,438 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>ZeroDay Syndicate - MVP</title>
+<style>
+  :root{
+    /* Palette */
+    --bg:#0A0A0F; --panel:#0F1117; --line:#1F2330;
+    --cy:#00FFFF;   /* SaaS / Player */
+    --mg:#FF00FF;   /* Research */
+    --am:#FFBF00;   /* Development */
+    --rd:#FF3366;   /* Breach/Vulnerable / AI */
+    --imm:#9CFFB0;  /* Immune ring */
+    --silent:#89C4FF; /* Silent monitor icon */
+    --txt:#D8E1FF;
+  }
+  html,body{height:100%;}
+  body{
+    margin:0; background:radial-gradient(1200px 800px at 70% -10%, #101423 0%, var(--bg) 60%);
+    color:var(--txt); font:14px/1.4 system-ui, Segoe UI, Roboto, Arial, sans-serif;
+    display:flex; flex-direction:column; align-items:center; padding:16px;
+  }
+  .game-container { display: flex; flex-direction: column; gap: 16px; width: 100%; max-width: 1400px; }
+  .main-content { display: flex; justify-content: space-between; gap: 16px; }
+  .tile{
+    flex-basis: 480px; flex-shrink: 0;
+    background:linear-gradient(180deg, #0F1117 0%, #0a0c12 100%);
+    border:1px solid #151a26; border-radius:16px; padding:16px 16px 12px;
+    box-shadow:0 0 0 1px #0a0c12, 0 16px 40px rgba(0,0,0,.6), inset 0 0 60px rgba(0,255,255,.04);
+  }
+  .tile__head{ display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:8px; }
+  .brand{ display:flex; align-items:center; gap:10px; letter-spacing:.08em; text-transform:uppercase; font-weight:700; }
+  .pill{font:12px/1 system-ui; padding:4px 8px; border-radius:999px; border:1px solid #263147; background:#0b0f18;}
+  .legend{display:flex; align-items:center; gap:10px; margin-top:8px; color:#9fb0d0; flex-wrap: wrap;}
+  .key{display:inline-flex; align-items:center; gap:6px; font-size:12px}
+  .dot{width:10px; height:10px; border-radius:2px; box-shadow:0 0 10px currentColor}
+  .cy{color:var(--cy)} .mg{color:var(--mg)} .am{color:var(--am)} .rd{color:var(--rd)}
+  .gridwrap{
+    position:relative; overflow:hidden; border-radius:12px; border:1px solid #1b2233;
+    background: radial-gradient(400px 200px at 20% -30%, rgba(0,255,255,.10), transparent 60%),
+                radial-gradient(400px 200px at 90% -20%, rgba(255,0,255,.08), transparent 60%),
+                linear-gradient(180deg, rgba(255,255,255,.03), rgba(255,255,255,0));
+  }
+  .tooltip{
+    position:fixed; pointer-events:none; z-index:10; padding:6px 8px; font:12px/1.2 ui-monospace, monospace;
+    background:#0a1120; border:1px solid #1e2a44; border-radius:8px; color:#cfe3ff;
+    box-shadow:0 8px 30px rgba(0,0,0,.5); transform:translate(-50%,-120%); opacity:0; transition:opacity .12s ease;
+    white-space:nowrap;
+  }
+  .hex{ filter: drop-shadow(0 0 2px rgba(0,0,0,.7)); transition:filter .08s ease, opacity .08s ease; cursor:pointer; }
+  .hex:hover{ filter: drop-shadow(0 0 12px rgba(0,255,255,.25)) drop-shadow(0 0 20px rgba(255,0,255,.20)); }
+  .glow{ text-shadow:0 0 10px currentColor, 0 0 18px currentColor; }
+
+  /* Controls Panel */
+  .controls { flex-grow: 1; display: flex; flex-direction: column; gap: 12px; padding: 20px; background: var(--panel); border-radius: 16px; border: 1px solid var(--line); }
+  .controls h2 { margin: 0 0 10px; text-align: center; letter-spacing: .1em; text-transform: uppercase; font-size: 18px; }
+  .stat-display { display: flex; justify-content: space-between; font-size: 16px; margin-bottom: 12px; }
+  .controls button { background: var(--cy); color: var(--bg); border: none; padding: 10px; border-radius: 8px; font-weight: 700; cursor: pointer; transition: all .15s ease; }
+  .controls button:hover { opacity: 0.85; box-shadow: 0 0 15px var(--cy); }
+  .controls button:disabled { background: #555; color: #888; cursor: not-allowed; }
+  .alloc-group { display: grid; grid-template-columns: 1fr auto; gap: 8px; align-items: center; }
+  .alloc-group label { font-weight: bold; }
+  .alloc-group input { width: 100%; background: #0a0a0f; border: 1px solid var(--line); color: var(--txt); padding: 8px; border-radius: 4px; text-align: right; }
+
+  /* Log */
+  .log { margin-top: 16px; width: 100%; }
+  #log-box { width: 100%; height: 100px; background: #0a0a0f; border: 1px solid var(--line); color: #8aa0c9; font-family: monospace; font-size: 12px; padding: 10px; border-radius: 8px; }
+
+</style>
+</head>
+<body>
+
+<div class="game-container">
+  <div class="main-content">
+    <!-- PLAYER TILE -->
+    <div class="tile" id="player-tile">
+      <div class="tile__head">
+        <div class="brand glow cy">PLAYER</div>
+        <div class="pill">Servers: <b id="player-srvTotal">0</b></div>
+      </div>
+      <div class="gridwrap">
+        <svg id="player-hexsvg" width="100%" height="320"></svg>
+      </div>
+      <div class="legend">
+        <span class="key cy"><span class="dot" style="background:var(--cy)"></span>SaaS</span>
+        <span class="key mg"><span class="dot" style="background:var(--mg)"></span>Research</span>
+        <span class="key am"><span class="dot" style="background:var(--am)"></span>Dev</span>
+      </div>
+    </div>
+
+    <!-- CONTROLS PANEL -->
+    <div class="controls">
+      <h2>SYSTEM CTRL</h2>
+      <div class="stat-display">
+        <span>Player Funds:</span> <span class="cy">$<span id="player-money">10000</span></span>
+      </div>
+      <div class="stat-display">
+        <span>AI Funds:</span> <span class="rd">$<span id="ai-money">10000</span></span>
+      </div>
+      <button id="btn-buy-server">BUY SERVER ($1000)</button>
+      <hr style="border-color: var(--line); width: 100%; margin: 10px 0;">
+      <h3>ALLOCATION</h3>
+      <div class="alloc-group">
+        <label for="alloc-saas" class="cy">SaaS</label>
+        <input type="number" id="alloc-saas" value="0" min="0">
+      </div>
+      <div class="alloc-group">
+        <label for="alloc-research" class="mg">Research</label>
+        <input type="number" id="alloc-research" value="0" min="0">
+      </div>
+      <div class="alloc-group">
+        <label for="alloc-dev" class="am">Dev</label>
+        <input type="number" id="alloc-dev" value="0" min="0">
+      </div>
+      <button id="btn-allocate">ALLOCATE SERVERS</button>
+      <hr style="border-color: var(--line); width: 100%; margin: 10px 0;">
+      <button id="btn-attack" disabled>LAUNCH ZDE ATTACK</button>
+      <div style="display:flex; gap: 8px; margin-top: auto;">
+        <button id="btn-save" style="background: var(--am); flex-grow: 1;">Save</button>
+        <button id="btn-load" style="background: var(--am); flex-grow: 1;">Load</button>
+      </div>
+    </div>
+
+    <!-- AI TILE -->
+    <div class="tile" id="ai-tile">
+      <div class="tile__head">
+        <div class="brand glow rd">BLACKCASK</div>
+        <div class="pill">Servers: <b id="ai-srvTotal">0</b></div>
+      </div>
+      <div class="gridwrap">
+        <svg id="ai-hexsvg" width="100%" height="320"></svg>
+      </div>
+      <div class="legend">
+        <span class="key cy"><span class="dot" style="background:var(--cy)"></span>SaaS</span>
+        <span class="key mg"><span class="dot" style="background:var(--mg)"></span>Research</span>
+        <span class="key am"><span class="dot" style="background:var(--am)"></span>Dev</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="log">
+    <textarea id="log-box" readonly>Initializing system...</textarea>
+  </div>
+</div>
+
+<div class="tooltip" id="tip"></div>
+
+<script>
+/* ---------- CONFIG & GAME STATE ---------- */
+const SIZE = 14; // hex radius
+const H = Math.sqrt(3) * SIZE;
+const ROLE_FILL = { saas:'var(--cy)', research:'var(--mg)', dev:'var(--am)' };
+
+// Game Balance
+const TICK_INTERVAL = 3000; // ms
+const SERVER_COST = 1000;
+const SAAS_INCOME = 100;
+const ZDE_DISCOVERY_CHANCE = 0.1; // 10% per research server per tick
+const ZDE_ATTACK_POWER = 3000;
+
+let gameState = {};
+let gameLoopInterval = null;
+
+// Element cache
+const E = {
+    tooltip: document.getElementById('tip'),
+    player: {
+        svg: document.getElementById('player-hexsvg'),
+        totalServers: document.getElementById('player-srvTotal'),
+        money: document.getElementById('player-money'),
+        alloc: {
+            saas: document.getElementById('alloc-saas'),
+            research: document.getElementById('alloc-research'),
+            dev: document.getElementById('alloc-dev'),
+        }
+    },
+    ai: {
+        svg: document.getElementById('ai-hexsvg'),
+        totalServers: document.getElementById('ai-srvTotal'),
+        money: document.getElementById('ai-money'),
+    },
+    buttons: {
+        buyServer: document.getElementById('btn-buy-server'),
+        allocate: document.getElementById('btn-allocate'),
+        attack: document.getElementById('btn-attack'),
+        save: document.getElementById('btn-save'),
+        load: document.getElementById('btn-load'),
+    },
+    log: document.getElementById('log-box')
+};
+
+/* ---------- HEX GRID RENDERING LOGIC (No changes) ---------- */
+function hexPoints(cx, cy, r=SIZE) {
+  const a = Math.sqrt(3)/2 * r;
+  const pts = [
+    [cx + r, cy], [cx + r/2, cy + a], [cx - r/2, cy + a],
+    [cx - r, cy], [cx - r/2, cy - a], [cx + r/2, cy - a],
+  ];
+  return pts.map(p => p.join(',')).join(' ');
+}
+function axialToPixel(q, r, rsize=SIZE) {
+  const x = rsize * (1.5 * q) + (rsize * 2);
+  const y = (Math.sqrt(3) * rsize) * (r + q/2) + (rsize * 2);
+  return [x, y];
+}
+function renderHexGrid(entity, svgEl) {
+    svgEl.innerHTML = '';
+    const g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+    let q = 0, r = 0, colMax = 12;
+    const serverList = [];
+    for (const role in entity.roles) {
+        for (let i = 0; i < entity.roles[role]; i++) serverList.push(role);
+    }
+    for (let i = 0; i < serverList.length; i++) {
+        const role = serverList[i];
+        const [cx, cy] = axialToPixel(q, r);
+        const hex = document.createElementNS('http://www.w3.org/2000/svg', 'polygon');
+        hex.setAttribute('points', hexPoints(cx, cy));
+        hex.setAttribute('class','hex');
+        hex.setAttribute('fill', ROLE_FILL[role] || '#333');
+        hex.setAttribute('stroke', '#2a334a');
+        hex.setAttribute('stroke-width', 1.25);
+        hex.dataset.info = `${role.toUpperCase()} Server`;
+        hex.addEventListener('mousemove', (e) => {
+            E.tooltip.style.left = e.clientX+'px';
+            E.tooltip.style.top = e.clientY+'px';
+            E.tooltip.innerHTML = e.target.dataset.info;
+            E.tooltip.style.opacity = 1;
+        });
+        hex.addEventListener('mouseleave', () => E.tooltip.style.opacity = 0);
+        g.appendChild(hex);
+        q++;
+        if (q >= colMax) { q = 0; r++; }
+    }
+    svgEl.appendChild(g);
+    const maxR = r;
+    const width = SIZE * 1.5 * colMax + SIZE * 4;
+    const height = H * (maxR + 1) + H * 2;
+    svgEl.setAttribute('viewBox', `0 0 ${Math.ceil(width)} ${Math.ceil(height)}`);
+}
+
+/* ---------- GAME LOGIC & INITIALIZATION ---------- */
+
+function getTotalServers(entity) {
+    return Object.values(entity.roles).reduce((a, b) => a + b, 0) + entity.unallocatedServers;
+}
+
+function updateUI() {
+    // Stats
+    E.player.money.textContent = Math.floor(gameState.player.money);
+    E.ai.money.textContent = Math.floor(gameState.ai.money);
+    E.player.totalServers.textContent = getTotalServers(gameState.player);
+    E.ai.totalServers.textContent = getTotalServers(gameState.ai);
+
+    // Alloc inputs
+    E.player.alloc.saas.value = gameState.player.roles.saas;
+    E.player.alloc.research.value = gameState.player.roles.research;
+    E.player.alloc.dev.value = gameState.player.roles.dev;
+
+    // Buttons
+    E.buttons.buyServer.disabled = gameState.player.money < SERVER_COST;
+    E.buttons.attack.disabled = gameState.player.zde <= 0;
+    E.buttons.attack.textContent = `LAUNCH ZDE ATTACK (${gameState.player.zde} avail)`;
+
+    // Grids
+    renderHexGrid(gameState.player, E.player.svg);
+    renderHexGrid(gameState.ai, E.ai.svg);
+}
+
+function runAI() {
+    const ai = gameState.ai;
+    const player = gameState.player;
+
+    // RULE 1: Attack if possible
+    if (ai.zde > 0) {
+        ai.zde--;
+        player.money -= ZDE_ATTACK_POWER;
+        logMessage(`!!! AI ATTACK: Blackcask launched a ZDE, costing you $${ZDE_ATTACK_POWER}.`);
+        return; // End turn after a major action
+    }
+
+    // RULE 2: Buy servers if possible
+    if (ai.money >= SERVER_COST * 2) { // Keep a cash buffer
+        ai.money -= SERVER_COST;
+        ai.unallocatedServers++;
+        logMessage("AI bought a new server.");
+    }
+
+    // RULE 3: Allocate servers (simple logic: 1 research for every 4 saas)
+    if (ai.unallocatedServers > 0) {
+        if (ai.roles.saas < ai.roles.research * 4) {
+            ai.roles.saas += ai.unallocatedServers;
+            logMessage("AI allocated servers to SaaS.");
+        } else {
+            ai.roles.research += ai.unallocatedServers;
+            logMessage("AI allocated servers to Research.");
+        }
+        ai.unallocatedServers = 0;
+    }
+}
+
+function gameTick() {
+    gameState.tick++;
+
+    // 1. Revenue
+    gameState.player.money += gameState.player.roles.saas * SAAS_INCOME;
+    gameState.ai.money += gameState.ai.roles.saas * SAAS_INCOME;
+
+    // 2. ZDE Discovery
+    for (let i = 0; i < gameState.player.roles.research; i++) {
+        if (Math.random() < ZDE_DISCOVERY_CHANCE) {
+            gameState.player.zde++;
+            logMessage("Player discovered a Zero-Day Exploit!");
+        }
+    }
+    for (let i = 0; i < gameState.ai.roles.research; i++) {
+        if (Math.random() < ZDE_DISCOVERY_CHANCE) {
+            gameState.ai.zde++;
+            logMessage("AI discovered a Zero-Day Exploit!");
+        }
+    }
+
+    // 3. AI Turn
+    runAI();
+
+    // 4. Update UI
+    updateUI();
+
+    // 5. Win/Loss Condition
+    if (gameState.player.money <= 0) {
+        clearInterval(gameLoopInterval);
+        alert("DEFEAT - You are bankrupt!");
+    }
+    if (gameState.ai.money <= 0) {
+        clearInterval(gameLoopInterval);
+        alert("VICTORY - Blackcask is bankrupt!");
+    }
+}
+
+function initGame() {
+    if (gameLoopInterval) clearInterval(gameLoopInterval);
+    gameState = {
+        player: { money: 10000, roles: { saas: 2, research: 1, dev: 0 }, zde: 0, unallocatedServers: 2 },
+        ai: { money: 10000, roles: { saas: 3, research: 1, dev: 0 }, zde: 0, unallocatedServers: 1 },
+        tick: 0
+    };
+    logMessage("New game started. Welcome to ZeroDay Syndicate.");
+    updateUI();
+    gameLoopInterval = setInterval(gameTick, TICK_INTERVAL);
+}
+
+function logMessage(message) {
+    E.log.value = `[Tick ${gameState.tick}] ${message}\n` + E.log.value;
+}
+
+/* ---------- PERSISTENCE ---------- */
+const SAVE_KEY = 'zeroDaySyndicateSave';
+
+function saveGame() {
+    try {
+        localStorage.setItem(SAVE_KEY, JSON.stringify(gameState));
+        logMessage("Game state saved.");
+        alert("Game Saved!");
+    } catch (e) {
+        console.error("Could not save game", e);
+        alert("Error: Could not save game.");
+    }
+}
+
+function loadGame() {
+    try {
+        const savedState = localStorage.getItem(SAVE_KEY);
+        if (savedState) {
+            if (gameLoopInterval) clearInterval(gameLoopInterval);
+            gameState = JSON.parse(savedState);
+            logMessage("Game state loaded from save.");
+            updateUI();
+            gameLoopInterval = setInterval(gameTick, TICK_INTERVAL);
+            alert("Game Loaded!");
+        } else {
+            alert("No save file found. Starting a new game.");
+            initGame();
+        }
+    } catch (e) {
+        console.error("Could not load game", e);
+        alert("Error: Could not load saved data. Starting new game.");
+        initGame();
+    }
+}
+
+
+/* ---------- EVENT LISTENERS ---------- */
+E.buttons.buyServer.addEventListener('click', () => {
+    if (gameState.player.money >= SERVER_COST) {
+        gameState.player.money -= SERVER_COST;
+        gameState.player.unallocatedServers++;
+        logMessage(`Server purchased. You have ${gameState.player.unallocatedServers} unallocated.`);
+        updateUI();
+    }
+});
+
+E.buttons.allocate.addEventListener('click', () => {
+    const saas = parseInt(E.player.alloc.saas.value) || 0;
+    const research = parseInt(E.player.alloc.research.value) || 0;
+    const dev = parseInt(E.player.alloc.dev.value) || 0;
+    const totalAllocated = saas + research + dev;
+    const totalServers = getTotalServers(gameState.player);
+
+    if (totalAllocated > totalServers) {
+        alert(`Error: You cannot allocate more servers than you own (${totalAllocated} > ${totalServers}).`);
+        return;
+    }
+
+    gameState.player.roles = { saas, research, dev };
+    gameState.player.unallocatedServers = totalServers - totalAllocated;
+    logMessage(`Servers allocated. ${gameState.player.unallocatedServers} remain unallocated.`);
+    updateUI();
+});
+
+E.buttons.attack.addEventListener('click', () => {
+    if (gameState.player.zde > 0) {
+        gameState.player.zde--;
+        gameState.ai.money -= ZDE_ATTACK_POWER;
+        logMessage(`Attack successful! AI loses $${ZDE_ATTACK_POWER}.`);
+        updateUI();
+    }
+});
+
+E.buttons.save.addEventListener('click', saveGame);
+E.buttons.load.addEventListener('click', loadGame);
+
+// Initialize the game
+initGame();
+</script>
+</body>
+</html>
