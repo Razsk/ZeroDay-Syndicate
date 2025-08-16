@@ -537,7 +537,11 @@ function getSaasServers(entity) {
 
 function updateUI() {
     // Stats
-    const playerIncome = (gameState.player.roles.saas * SAAS_INCOME) + PASSIVE_INCOME;
+    let playerIncome = PASSIVE_INCOME;
+    SAAS_CATEGORIES.forEach(cat => {
+        const market = gameState.market[cat];
+        playerIncome += (market.playerShare || 0) * (market.player * SAAS_INCOME);
+    });
     E.player.money.textContent = Math.floor(gameState.player.money);
     E.player.cashflow.textContent = Math.floor(playerIncome);
     E.ai.money.textContent = Math.floor(gameState.ai.money);
@@ -548,7 +552,6 @@ function updateUI() {
 
     // Server counts
     E.serverMgmt.unallocatedCount.textContent = gameState.player.unallocatedServers;
-    E.serverMgmt.saasCount.textContent = getSaasServers(gameState.player);
     E.serverMgmt.researchCount.textContent = gameState.player.roles.research;
     E.serverMgmt.devCount.textContent = gameState.player.roles.dev;
 
