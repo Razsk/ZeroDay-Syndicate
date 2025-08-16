@@ -724,9 +724,55 @@ document.querySelectorAll('.btn-collapse').forEach(button => {
 
 
 /* ---------- DRAG & DROP LOGIC ---------- */
+// Helper function to create a data URL for the cursor
+function getCursorUrl(target) {
+    let svgString = '';
+    const size = 32; // The size of our cursor icon
+
+    let dragType = '';
+    if (target.matches('.server-draggable') || target.matches('.server-hex-group')) {
+        dragType = 'server';
+    } else if (target.matches('.zde-item')) {
+        dragType = 'zde';
+    }
+
+    switch(dragType) {
+        case 'server': {
+            let color = 'grey'; // fallback
+            if (target.matches('.server-draggable')) {
+                 const computedStyle = window.getComputedStyle(target);
+                 color = computedStyle.backgroundColor;
+            } else { // server-hex-group
+                const polygon = target.querySelector('.hex');
+                if (polygon) color = polygon.getAttribute('fill');
+            }
+            const hexShape = hexPoints(size/2, size/2, size/2 - 2); // -2 for a little padding
+            svgString = `<svg width="${size}" height="${size}" xmlns="http://www.w3.org/2000/svg"><polygon points="${hexShape}" fill="${color}" stroke="white" stroke-width="2" /></svg>`;
+            break;
+        }
+        case 'zde': {
+            // Recreate the ZDE triangle shape for the cursor
+            const trianglePoints = `${size/2},${size*0.1} ${size*0.9},${size*0.9} ${size*0.1},${size*0.9}`;
+            const originalPolygon = target.querySelector('polygon');
+            const color = originalPolygon ? window.getComputedStyle(originalPolygon).fill : '#39FF14';
+            svgString = `<svg width="${size}" height="${size}" xmlns="http://www.w3.org/2000/svg"><polygon points="${trianglePoints}" fill="${color}" stroke="white" stroke-width="2" /></svg>`;
+            break;
+        }
+    }
+
+    if (svgString) {
+        const encodedSvg = encodeURIComponent(svgString);
+        // Center hotspot for the cursor
+        return `url('data:image/svg+xml;utf8,${encodedSvg}') ${size/2} ${size/2}, auto`;
+    }
+
+    return 'grabbing'; // fallback cursor
+}
+
 const dragListeners = {
     start(event) {
         event.target.classList.add('is-dragging');
+        document.body.style.cursor = getCursorUrl(event.target);
     },
     move(event) {
         const target = event.target;
@@ -741,6 +787,7 @@ const dragListeners = {
         event.target.setAttribute('data-x', 0);
         event.target.setAttribute('data-y', 0);
         event.target.classList.remove('is-dragging');
+        document.body.style.cursor = 'default';
     }
 };
 
