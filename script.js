@@ -539,48 +539,49 @@ function runAI() {
     }
 }
 
-function calculateEfficacy(serverCount, efficiency, ageInMonths) {
-    if (serverCount === 0) {
+function calculateEfficacy(saasProduct) {
+    if (!saasProduct || saasProduct.averageAge <= 0) {
         return 0;
     }
-    const ageFactor = 1 + (ageInMonths / 12);
-    const efficacy = (serverCount * efficiency) * (1 / ageFactor);
-    return efficacy;
+    // Efficacy is the total accumulated development investment (weight) divided by how outdated the product is (averageAge).
+    return saasProduct.weight / saasProduct.averageAge;
 }
 
 function gameTick() {
     gameState.tick++;
 
-    // 0. Age all SaaS products
+    // 0. Age products and process development
     gameState.saasCategories.forEach(cat => {
-        // Player products
+        // Player product
         const playerSaas = gameState.player.servers[cat]?.saas;
-        if (playerSaas && playerSaas.servers.length > 0) {
-            playerSaas.ageInMonths++;
+        if (playerSaas) {
+            const devUnits = gameState.player.servers[cat]?.dev.servers.length || 0;
+            const currentWeight = playerSaas.weight;
+            const agedAverageAge = playerSaas.averageAge + 1;
+
+            if (devUnits > 0) {
+                const newWeight = currentWeight + devUnits;
+                playerSaas.averageAge = (agedAverageAge * currentWeight + 1 * devUnits) / newWeight;
+                playerSaas.weight = newWeight;
+            } else {
+                playerSaas.averageAge = agedAverageAge;
+            }
         }
-        // AI products
+
+        // AI product
         const aiSaas = gameState.ai.products[cat]?.saas;
-        if (aiSaas && aiSaas.serverCount > 0) {
-            aiSaas.ageInMonths++;
-        }
-    });
+        if (aiSaas) {
+            const devUnits = gameState.ai.products[cat]?.dev.serverCount || 0;
+            const currentWeight = aiSaas.weight;
+            const agedAverageAge = aiSaas.averageAge + 1;
 
-    // 1. Process Development
-    gameState.saasCategories.forEach(cat => {
-        // Player
-        const playerDevCount = gameState.player.servers[cat]?.dev.servers.length || 0;
-        if (playerDevCount > 0) {
-            let currentEff = gameState.player.servers[cat].saas.efficiency;
-            currentEff += playerDevCount * 0.005; // Small boost per server
-            gameState.player.servers[cat].saas.efficiency = Math.min(2.0, currentEff); // Cap at 200%
-        }
-
-        // AI
-        const aiDevCount = gameState.ai.products[cat]?.dev.serverCount || 0;
-        if (aiDevCount > 0) {
-            let currentEff = gameState.ai.products[cat].saas.efficiency;
-            currentEff += aiDevCount * 0.005;
-            gameState.ai.products[cat].saas.efficiency = Math.min(2.0, currentEff);
+            if (devUnits > 0) {
+                const newWeight = currentWeight + devUnits;
+                aiSaas.averageAge = (agedAverageAge * currentWeight + 1 * devUnits) / newWeight;
+                aiSaas.weight = newWeight;
+            } else {
+                aiSaas.averageAge = agedAverageAge;
+            }
         }
     });
 
@@ -594,8 +595,8 @@ function gameTick() {
         const aiSaas = gameState.ai.products[cat].saas;
 
         // Calculate efficacy for each entity in the category
-        const playerEfficacy = calculateEfficacy(playerSaas.servers.length, playerSaas.efficiency, playerSaas.ageInMonths);
-        const aiEfficacy = calculateEfficacy(aiSaas.serverCount, aiSaas.efficiency, aiSaas.ageInMonths);
+        const playerEfficacy = playerSaas.servers.length > 0 ? calculateEfficacy(playerSaas) : 0;
+        const aiEfficacy = aiSaas.serverCount > 0 ? calculateEfficacy(aiSaas) : 0;
         const totalEfficacy = playerEfficacy + aiEfficacy;
 
         // Calculate market share
@@ -697,13 +698,13 @@ function initGame() {
     selectedCategories.forEach(cat => {
         playerServers[cat] = {
             // Each role is an object containing a list of servers
-            saas: { efficiency: 1.0, ageInMonths: 0, servers: [] },
+            saas: { weight: 10, averageAge: 1, servers: [] },
             research: { servers: [] },
             dev: { servers: [] }
         };
         // AI has a similar product structure, but with counts instead of server lists
         aiProducts[cat] = {
-            saas: { efficiency: 1.0, ageInMonths: 0, serverCount: 0, breachedServerPercentage: 0 },
+            saas: { weight: 10, averageAge: 1, serverCount: 0, breachedServerPercentage: 0 },
             research: { serverCount: 0 },
             dev: { serverCount: 0 }
         };
@@ -712,8 +713,6 @@ function initGame() {
     // Add initial player servers to the new structure
     playerServers[selectedCategories[0]].saas.servers.push({type: 'saas', id: 'p-s-1', immune: true, cluster: 'A'});
     playerServers[selectedCategories[0]].saas.servers.push({type: 'saas', id: 'p-s-2', vulnerable: true, cluster: 'A'});
-    playerServers[selectedCategories[0]].saas.ageInMonths = 3; // Example age
-    playerServers[selectedCategories[0]].saas.efficiency = 1.1; // Example efficiency
 
     playerServers[selectedCategories[1]].saas.servers.push({type: 'saas', id: 'p-s-3', silent: true, cluster: 'B'});
     playerServers[selectedCategories[2]].research.servers.push({type: 'research', id: 'p-r-1', immune: false, cluster: 'C'});
@@ -721,8 +720,6 @@ function initGame() {
 
     // Add initial AI servers
     aiProducts[selectedCategories[1]].saas.serverCount = 3;
-    aiProducts[selectedCategories[1]].saas.ageInMonths = 5;
-    aiProducts[selectedCategories[1]].saas.efficiency = 0.9;
 
     const initialAiResearch = { serverCount: 1 }; // General research servers for AI
 
@@ -747,8 +744,6 @@ function initGame() {
             playerShare: 0,
             aiShare: 0,
             // These two are deprecated by the new product-specific efficiency model
-            playerEfficiency: 1.0,
-            aiEfficiency: 1.0,
         };
     });
 
