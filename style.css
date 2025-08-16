@@ -136,8 +136,21 @@ button.btn-amber:hover { box-shadow: 0 0 15px var(--am); }
 
 /* Log & ZDE */
 #log-box { width: 100%; flex-grow: 1; background: #0a0a0f; border: 1px solid var(--line); color: #8aa0c9; font-family: monospace; font-size: 12px; padding: 10px; border-radius: 8px; box-sizing: border-box; }
-#zde-display { display: flex; flex-wrap: wrap; gap: 8px; align-content: flex-start; flex-grow: 1; padding: 8px; background: rgba(255,0,255,0.05); border-radius: 6px; min-height: 50px; }
-.zde-item { cursor: grab; }
+#zde-display {
+    display: block; /* Changed from flex */
+    flex-grow: 1;
+    padding: 8px;
+    background: rgba(255,0,255,0.05);
+    border-radius: 6px;
+    min-height: 50px;
+    position: relative;
+    overflow: hidden; /* Hide parts of ZDEs that go outside */
+}
+.zde-item {
+    cursor: grab;
+    position: absolute;
+    transition: transform 0.1s linear; /* Smooths out the movement slightly */
+}
 .zde-item polygon {
     stroke: var(--bg);
     stroke-width: 2px;

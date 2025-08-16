@@ -21,6 +21,7 @@ const NAME_SUFFIX = ["Syndicate", "Dynamics", "Systems", "Collective", "Labs", "
 
 let gameState = {};
 let gameLoopInterval = null;
+let zdeAnimationState = {};
 
 // Element cache
 const E = {
@@ -128,7 +129,7 @@ function renderMainHexUI() {
 
     const zdeText = document.createElementNS('http://www.w3.org/2000/svg', 'text');
     zdeText.setAttribute('x', center_x);
-    zdeText.setAttribute('y', center_y - 10);
+    zdeText.setAttribute('y', center_y - r_large + 30); // Move below top border
     zdeText.setAttribute('fill', 'var(--mg)');
     zdeText.setAttribute('text-anchor', 'middle');
     zdeText.setAttribute('font-size', '20');
@@ -152,9 +153,9 @@ function renderMainHexUI() {
     gameState.saasCategories.forEach((cat, i) => {
         const angle_deg = 60 * i + 30;
         const angle_rad = Math.PI / 180 * angle_deg;
-        const distance = r_large * 1.8;
-        const cx = center_x + distance * Math.cos(angle_rad);
-        const cy = center_y + distance * Math.sin(angle_rad);
+        const hex_distance = r_large * 1.8;
+        const cx = center_x + hex_distance * Math.cos(angle_rad);
+        const cy = center_y + hex_distance * Math.sin(angle_rad);
 
         const categoryHex = document.createElementNS('http://www.w3.org/2000/svg', 'polygon');
         categoryHex.setAttribute('points', hexPoints(cx, cy, r_large * 0.8));
@@ -166,22 +167,42 @@ function renderMainHexUI() {
         categoryHex.classList.add('dropzone');
         g.appendChild(categoryHex);
 
+        // New label logic
+        const label_distance = r_large * 2.8; // Place it further out
+        const lx = center_x + label_distance * Math.cos(angle_rad);
+        const ly = center_y + label_distance * Math.sin(angle_rad);
+
+        let rotation = 0;
+        let textAnchor = 'middle';
+
+        // Left side (angles 150, 210)
+        if (angle_deg > 120 && angle_deg < 240) {
+            rotation = -60;
+            textAnchor = 'end';
+        }
+        // Right side (angles 30, 330)
+        else if (angle_deg < 60 || angle_deg > 300) {
+            rotation = 60;
+            textAnchor = 'start';
+        }
+
         const text = document.createElementNS('http://www.w3.org/2000/svg', 'text');
-        text.setAttribute('x', cx);
-        text.setAttribute('y', cy - r_large * 0.8 + 25);
+        text.setAttribute('x', lx);
+        text.setAttribute('y', ly);
+        text.setAttribute('transform', `rotate(${rotation}, ${lx}, ${ly})`);
         text.setAttribute('fill', 'var(--txt)');
-        text.setAttribute('text-anchor', 'middle');
+        text.setAttribute('text-anchor', textAnchor);
         text.setAttribute('font-size', '16');
         text.style.pointerEvents = 'none';
         text.textContent = cat;
         g.appendChild(text);
 
         // Render servers inside this hex
-        renderServersInHex(g, cx, cy, r_large * 0.7, gameState.player.servers[cat]);
+        renderServersInHex(g, cx, cy, r_large * 0.7, gameState.player.servers[cat], cat);
     });
 }
 
-function renderServersInHex(svgGroup, hexCx, hexCy, radius, servers) {
+function renderServersInHex(svgGroup, hexCx, hexCy, radius, servers, category) {
     const server_r = 12;
     let serversToRender = [];
     ['saas', 'research', 'dev'].forEach(type => {
@@ -208,6 +229,7 @@ function renderServersInHex(svgGroup, hexCx, hexCy, radius, servers) {
         const g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
         g.setAttribute('class', 'server-hex-group');
         g.dataset.serverInfo = JSON.stringify(server); // Store info for tooltip
+        g.dataset.sourceCategory = category; // Store source category
 
         const hex = document.createElementNS('http://www.w3.org/2000/svg', 'polygon');
         hex.setAttribute('points', hexPoints(final_x, final_y, server_r));
@@ -349,12 +371,23 @@ function renderZDEs() {
     const container = document.getElementById('zde-display');
     if (!container) return;
     container.innerHTML = '';
+
+    // Clean up old animation states
+    const currentZdeIds = new Set(gameState.player.zdes.map(z => z.id));
+    for (const id in zdeAnimationState) {
+        if (!currentZdeIds.has(id)) {
+            delete zdeAnimationState[id];
+        }
+    }
+
+    const containerRect = container.getBoundingClientRect();
+
     gameState.player.zdes.forEach(zde => {
         const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
         svg.setAttribute('class', 'zde-item');
         svg.setAttribute('viewBox', '0 0 24 24');
-        svg.setAttribute('width', '24');
-        svg.setAttribute('height', '24');
+        svg.setAttribute('width', '32');
+        svg.setAttribute('height', '32');
         svg.dataset.id = zde.id;
 
         const triangle = document.createElementNS("http://www.w3.org/2000/svg", "polygon");
@@ -370,6 +403,18 @@ function renderZDEs() {
         svg.addEventListener('mouseleave', () => E.tooltip.style.opacity = 0);
 
         container.appendChild(svg);
+
+        // Initialize animation state if it doesn't exist
+        if (!zdeAnimationState[zde.id]) {
+            zdeAnimationState[zde.id] = {
+                el: svg,
+                x: Math.random() * (containerRect.width - 32),
+                y: Math.random() * (containerRect.height - 32),
+                vx: (Math.random() - 0.5) * 0.5, // Slow velocity
+                vy: (Math.random() - 0.5) * 0.5,
+                radius: 16
+            };
+        }
     });
 }
 
@@ -662,6 +707,7 @@ function initDragAndDrop() {
 
     interact('.server-draggable').draggable({ ...dragListeners });
     interact('.zde-item').draggable({ ...dragListeners });
+    interact('.server-hex-group').draggable({ listeners: dragListeners });
 
     const zdeDropzoneOptions = {
         ondragenter: onDropzoneEnter,
@@ -703,34 +749,54 @@ function initDragAndDrop() {
     interact('#ai-dropzone-sabotage').dropzone(zdeDropzoneOptions);
 
     const serverDropzoneOptions = {
-        accept: '.server-draggable',
+        accept: '.server-draggable, .server-hex-group',
         ondragenter: onDropzoneEnter,
         ondragleave: onDropzoneLeave,
         ondrop: function (event) {
             const draggable = event.relatedTarget;
             const dropzone = event.target;
-            const category = dropzone.dataset.category;
-            const type = draggable.dataset.type;
-            const cost = parseInt(draggable.dataset.cost, 10);
+            const newCategory = dropzone.dataset.category;
 
-            if (!category || !type) return;
+            // Case 1: Buying a new server from the market
+            if (draggable.matches('.server-draggable')) {
+                const type = draggable.dataset.type;
+                const cost = parseInt(draggable.dataset.cost, 10);
 
-            if (gameState.player.money >= cost) {
-                gameState.player.money -= cost;
-                const newServer = {
-                    id: `p-${type.slice(0,1)}-${Date.now()}`,
-                    type: type,
-                    immune: false,
-                    vulnerable: false,
-                    silent: false,
-                    cluster: 'A' // default cluster
+                if (!newCategory || !type) return;
+
+                if (gameState.player.money >= cost) {
+                    gameState.player.money -= cost;
+                    const newServer = {
+                        id: `p-${type.slice(0,1)}-${Date.now()}`,
+                        type: type,
+                        immune: false,
+                        vulnerable: false,
+                        silent: false,
+                        cluster: 'A' // default cluster
+                    }
+                    gameState.player.servers[newCategory][type].push(newServer);
+                    logMessage(`Purchased ${type} server for ${newCategory} for $${cost}.`);
+                    updateUI();
+                } else {
+                    alert(`Not enough funds. A ${type} server costs $${cost}.`);
                 }
-                gameState.player.servers[category][type].push(newServer);
-                logMessage(`Purchased ${type} server for ${category} for $${cost}.`);
-                updateUI();
-            } else {
-                alert(`Not enough funds. A ${type} server costs $${cost}.`);
             }
+            // Case 2: Moving an existing server
+            else if (draggable.matches('.server-hex-group')) {
+                const serverInfo = JSON.parse(draggable.dataset.serverInfo);
+                const oldCategory = draggable.dataset.sourceCategory;
+
+                if (oldCategory === newCategory) return; // No change
+
+                const serverIndex = gameState.player.servers[oldCategory][serverInfo.type].findIndex(s => s.id === serverInfo.id);
+                if (serverIndex > -1) {
+                    const [serverToMove] = gameState.player.servers[oldCategory][serverInfo.type].splice(serverIndex, 1);
+                    gameState.player.servers[newCategory][serverInfo.type].push(serverToMove);
+                    logMessage(`Moved ${serverInfo.type} server from ${oldCategory} to ${newCategory}.`);
+                    updateUI();
+                }
+            }
+
             dropzone.classList.remove('can-drop');
             const polygon = dropzone.querySelector('polygon') || dropzone;
             polygon.style.fill = 'rgba(0, 255, 255, 0.05)';
@@ -747,6 +813,75 @@ function initDragAndDrop() {
     }, 100);
 }
 
+function animateZDEs() {
+    const container = document.getElementById('zde-display');
+    if (!container) return;
+    const containerRect = container.getBoundingClientRect();
+
+    const states = Object.values(zdeAnimationState);
+
+    states.forEach(state => {
+        if (!state.el || !state.el.parentElement) {
+            // Element has been removed, skip
+            return;
+        }
+
+        // Update position
+        state.x += state.vx;
+        state.y += state.vy;
+
+        // Wall collision
+        if (state.x <= 0 || state.x >= containerRect.width - state.radius * 2) {
+            state.vx *= -1;
+            state.x = Math.max(0, Math.min(state.x, containerRect.width - state.radius * 2));
+        }
+        if (state.y <= 0 || state.y >= containerRect.height - state.radius * 2) {
+            state.vy *= -1;
+            state.y = Math.max(0, Math.min(state.y, containerRect.height - state.radius * 2));
+        }
+
+        // Apply transform
+        state.el.style.transform = `translate(${state.x}px, ${state.y}px)`;
+    });
+
+    // Collision between ZDEs
+    for (let i = 0; i < states.length; i++) {
+        for (let j = i + 1; j < states.length; j++) {
+            const stateA = states[i];
+            const stateB = states[j];
+
+            const dx = stateB.x - stateA.x;
+            const dy = stateB.y - stateA.y;
+            const distance = Math.sqrt(dx * dx + dy * dy);
+            const minDistance = stateA.radius + stateB.radius;
+
+            if (distance < minDistance) {
+                // Simple collision response: push them apart
+                const overlap = minDistance - distance;
+                const angle = Math.atan2(dy, dx);
+                const pushX = (overlap / 2) * Math.cos(angle);
+                const pushY = (overlap / 2) * Math.sin(angle);
+
+                stateA.x -= pushX;
+                stateA.y -= pushY;
+                stateB.x += pushX;
+                stateB.y += pushY;
+
+                // Also swap velocities for a more "bouncy" feel
+                const tempVx = stateA.vx;
+                const tempVy = stateA.vy;
+                stateA.vx = stateB.vx;
+                stateA.vy = stateB.vy;
+                stateB.vx = tempVx;
+                stateB.vy = tempVy;
+            }
+        }
+    }
+
+    requestAnimationFrame(animateZDEs);
+}
+
 // Initialize the game
 initGame();
 initDragAndDrop();
+requestAnimationFrame(animateZDEs);
