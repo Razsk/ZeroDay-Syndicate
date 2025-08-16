@@ -10,6 +10,7 @@ const AI_RESEARCH_COST = 1000;
 const AI_DEV_COST = 1000;
 const PASSIVE_INCOME = 50;
 const SERVER_OPEX = 25; // Opex cost per server per tick
+const REVENUE_MULTIPLIER = 50; // Multiplier for SaaS revenue, decoupled from OPEX
 const BASE_TAM = 25000; // Lowest TAM, used for revenue scaling
 const ZDE_DISCOVERY_CHANCE = 0.1; // 10% per research server per tick
 const ZDE_ATTACK_POWER = 3000;
@@ -605,7 +606,7 @@ function gameTick() {
         }
 
         // Calculate gross revenue for this category
-        const categoryTotalRevenue = totalEfficacy * SERVER_OPEX * (market.tam / BASE_TAM);
+        const categoryTotalRevenue = totalEfficacy * REVENUE_MULTIPLIER * (market.tam / BASE_TAM);
         let playerGrossRevenueForCategory = market.playerShare * categoryTotalRevenue;
         let aiGrossRevenueForCategory = market.aiShare * categoryTotalRevenue;
 
