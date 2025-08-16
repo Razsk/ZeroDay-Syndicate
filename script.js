@@ -16,16 +16,18 @@ const ZDE_ATTACK_POWER = 3000;
 
 // Content Generation
 const SAAS_CATEGORY_DATA = {
-    "Social Media": { tam: 60000 },
-    "Streaming Service": { tam: 80000 },
-    "Cloud Storage": { tam: 50000 },
-    "VPN Provider": { tam: 40000 },
-    "Online Gaming": { tam: 70000 },
-    "Crypto Exchange": { tam: 90000 },
-    "E-commerce Platform": { tam: 75000 },
-    "Music Production": { tam: 30000 },
-    "Fitness Tracker": { tam: 35000 },
-    "Ad Blocker": { tam: 25000 }
+    "Neural Interface Software": { tam: 85000 },
+    "Wetware Clinics": { tam: 70000 },
+    "Synth-Cuisine Printers": { tam: 45000 },
+    "Bio-Enhancement Farms": { tam: 65000 },
+    "Cryp-Currency Exchanges": { tam: 90000 },
+    "AI-Generated Media": { tam: 75000 },
+    "Robotic Companion Services": { tam: 55000 },
+    "Holographic Entertainment": { tam: 80000 },
+    "Data Haven Fortresses": { tam: 60000 },
+    "Smart Dust Networks": { tam: 50000 },
+    "Autonomous Drone Fleets": { tam: 40000 },
+    "Black Market Simulators": { tam: 30000 }
 };
 const ALL_SAAS_CATEGORIES = Object.keys(SAAS_CATEGORY_DATA);
 const NAME_PREFIX = ["Cyber", "Neuro", "Hex", "Data", "Quantum", "Astro", "ZeroDay", "Bio", "Giga", "Tera", "Peta", "Exa"];
