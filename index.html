@@ -71,9 +71,9 @@
   #server-mgt-tile { grid-column: 2; grid-row: 1 / 4; }
   #ai-tile { grid-column: 3; grid-row: 1 / 3; }
   #cash-flow-tile { grid-column: 1; grid-row: 3; }
-  #market-share-tile { grid-column: 3; grid-row: 3; }
-  #log-tile { grid-column: 2; grid-row: 4; }
-  #zde-tile { grid-column: 1 / 4; grid-row: 5; }
+  #market-share-tile { grid-column: 1; grid-row: 4; }
+  #log-tile { grid-column: 2; grid-row: 5; }
+  #zde-tile { grid-column: 1 / 4; grid-row: 6; }
 
   .tile__head{ display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:12px; flex-shrink: 0; }
   .brand{ display:flex; align-items:center; gap:10px; letter-spacing:.08em; text-transform:uppercase; font-weight:700; font-size: 16px; }
@@ -95,7 +95,8 @@
   .hex.is-dragging { opacity: 0.5; }
 
   /* Server Management Panel */
-  .server-market { padding: 12px; border: 1px dashed var(--line); border-radius: 8px; margin-bottom: 12px; text-align: center; }
+  .server-mgmt-top-row { display: flex; align-items: stretch; gap: 16px; margin-bottom: 12px; }
+  .server-market { padding: 12px; border: 1px dashed var(--line); border-radius: 8px; text-align: center; flex-basis: 20%; }
   .market-item { display: inline-flex; flex-direction: column; align-items: center; gap: 6px; }
   .server-market .server-draggable {
     width: 24px; height: 24px; background: var(--am);
@@ -133,9 +134,12 @@
 
   /* Log & ZDE */
   #log-box { width: 100%; flex-grow: 1; background: #0a0a0f; border: 1px solid var(--line); color: #8aa0c9; font-family: monospace; font-size: 12px; padding: 10px; border-radius: 8px; box-sizing: border-box; }
-  .zde-actions { display: flex; gap: 12px; }
-  .zde-actions button { flex-grow: 1; background: var(--mg); }
-  .zde-actions button:hover { box-shadow: 0 0 15px var(--mg); }
+  .zde-panel { padding: 12px; border: 1px dashed var(--rd); border-radius: 8px; flex-grow: 1; }
+  .zde-actions { display: flex; gap: 12px; height: 100%; }
+  .zde-actions button { flex-grow: 1; background: var(--rd); }
+  .zde-actions button:hover { box-shadow: 0 0 15px var(--rd); }
+  .zde-actions button:disabled { background: #555; color: #888; cursor: not-allowed; box-shadow: none; opacity: 0.5; }
+
 
   /* Tooltip */
   .tooltip{
@@ -209,10 +213,20 @@
     <!-- SERVER MANAGEMENT -->
     <div class="tile" id="server-mgt-tile">
         <div class="tile__head"><div class="brand">SERVER MGMT</div></div>
-        <div class="server-market">
-            <div class="market-item">
-                <div class="server-draggable" data-cost="1000"></div>
-                <span>$1000</span>
+        <div class="server-mgmt-top-row">
+            <div class="server-market">
+                <div class="brand" style="font-size:12px; justify-content:center; margin-bottom:8px;">BUY SERVER</div>
+                <div class="market-item">
+                    <div class="server-draggable" data-cost="1000" data-origin="market"></div>
+                    <span>$1000</span>
+                </div>
+            </div>
+            <div class="zde-panel">
+                 <div class="brand rd" style="font-size:12px; justify-content:center; margin-bottom:8px;">ZDE OPERATIONS</div>
+                <div class="zde-actions">
+                    <button id="btn-attack-steal" disabled>Steal Cash</button>
+                    <button id="btn-attack-sabotage" disabled>Sabotage</button>
+                </div>
             </div>
         </div>
         <div id="unallocated-pool" class="dropzone" data-role="unallocated">
@@ -271,12 +285,8 @@
         <div class="tile__head"><div class="brand">EVENT LOG</div></div>
         <textarea id="log-box" readonly>Initializing...</textarea>
     </div>
-    <div class="tile" id="zde-tile">
-        <div class="tile__head"><div class="brand">ZDE OPERATIONS</div></div>
-        <div class="zde-actions">
-            <button id="btn-attack-steal" disabled>Steal Cash</button>
-            <button id="btn-attack-sabotage" disabled>Sabotage</button>
-        </div>
+    <!-- This tile is now empty and will be removed -->
+    <div class="tile" id="zde-tile" style="display: none;">
     </div>
   </div>
 </div>
@@ -313,7 +323,7 @@ const H = Math.sqrt(3) * SIZE;
 const ROLE_FILL = { saas:'var(--cy)', research:'var(--mg)', dev:'var(--am)' };
 
 // Game Balance
-const TICK_INTERVAL = 3000; // ms
+const TICK_INTERVAL = 15000; // ms
 const SERVER_COST = 1000;
 const PASSIVE_INCOME = 50;
 const SAAS_INCOME = 100;
@@ -396,7 +406,7 @@ function initCashFlowChart() {
                     borderColor: 'var(--cy)',
                     backgroundColor: 'rgba(0, 255, 255, 0.1)',
                     tension: 0.3,
-                    fill: true
+                    fill: false
                 },
                 {
                     label: 'AI',
@@ -404,7 +414,7 @@ function initCashFlowChart() {
                     borderColor: 'var(--rd)',
                     backgroundColor: 'rgba(255, 51, 102, 0.1)',
                     tension: 0.3,
-                    fill: true
+                    fill: false
                 }
             ]
         },
@@ -497,7 +507,8 @@ function renderHexGrid(entity, svgEl) {
         const hex = document.createElementNS('http://www.w3.org/2000/svg', 'polygon');
         hex.setAttribute('points', hexPoints(cx, cy));
         hex.setAttribute('class','hex');
-        hex.setAttribute('fill', ROLE_FILL[role] || '#333');
+        const fill_role = SAAS_CATEGORIES.includes(role) ? 'saas' : role;
+        hex.setAttribute('fill', ROLE_FILL[fill_role] || '#333');
         hex.setAttribute('stroke', '#2a334a');
         hex.setAttribute('stroke-width', 1.25);
         hex.dataset.info = `${role.toUpperCase()} Server`;
