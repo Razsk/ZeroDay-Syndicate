@@ -372,7 +372,7 @@ function initMarketShareChart() {
             data: [],
             backgroundColor: `hsla(${i * 60}, 100%, 70%, 0.2)`,
             borderColor: `hsla(${i * 60}, 100%, 70%, 1)`,
-            fill: true,
+            fill: false,
         }
     });
 
@@ -387,7 +387,7 @@ function initMarketShareChart() {
             maintainAspectRatio: false,
             scales: {
                 y: {
-                    stacked: true,
+                    stacked: false,
                     ticks: {
                         callback: (value) => (value * 100).toFixed(0) + '%'
                     }
@@ -395,7 +395,7 @@ function initMarketShareChart() {
             },
             plugins: {
                 filler: {
-                    propagate: true
+                    propagate: false
                 },
                 tooltip: {
                     callbacks: {
@@ -427,17 +427,17 @@ function initCashFlowChart() {
                     label: 'Player',
                     data: [],
                     borderColor: 'var(--cy)',
-                    backgroundColor: 'rgba(0, 255, 255, 0.1)',
+                    backgroundColor: 'rgba(0, 255, 255, 0.15)',
                     tension: 0.3,
-                    fill: false
+                    fill: true
                 },
                 {
                     label: 'AI',
                     data: [],
                     borderColor: 'var(--rd)',
-                    backgroundColor: 'rgba(255, 51, 102, 0.1)',
+                    backgroundColor: 'rgba(255, 51, 102, 0.15)',
                     tension: 0.3,
-                    fill: false
+                    fill: true
                 }
             ]
         },
