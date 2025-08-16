@@ -5,7 +5,9 @@ const CLUSTER_STROKE = { A:'#2bd9ff', B:'#ff83ff', C:'#ffe082', D:'#6effa8', E:'
 
 // Game Balance
 const TICK_INTERVAL = 15000; // ms
-const SERVER_COST = 1000;
+const AI_SAAS_COST = 1500;
+const AI_RESEARCH_COST = 1000;
+const AI_DEV_COST = 1000;
 const PASSIVE_INCOME = 50;
 const SAAS_INCOME = 100;
 const ZDE_DISCOVERY_CHANCE = 0.1; // 10% per research server per tick
@@ -384,48 +386,36 @@ function runAI() {
         return; // End turn after a major action
     }
 
-    // RULE 2: Buy servers if it's a good investment
-    if (ai.money >= SERVER_COST * 3) { // Keep a larger cash buffer
-        ai.money -= SERVER_COST;
-        ai.unallocatedServers++;
-        logMessage(`AI (${ai.name}) bought a new server.`);
-    }
+    // RULE 2: Decide what server to buy, and buy it if affordable
+    const allocate = (role, count) => {
+        if (!ai.roles[role]) {
+            ai.roles[role] = 0;
+        }
+        ai.roles[role] += count;
+        logMessage(`AI (${ai.name}) allocated ${count} servers to ${role}.`);
+    };
 
-    // RULE 3: Allocate servers
-    if (ai.unallocatedServers > 0) {
-        const choice = Math.random();
-        const serversToAllocate = ai.unallocatedServers;
-        ai.unallocatedServers = 0; // Clear unallocated servers first
+    const choice = Math.random();
+    const randomCategory = gameState.saasCategories[Math.floor(Math.random() * gameState.saasCategories.length)];
 
-        const allocate = (role, count) => {
-            if (!ai.roles[role]) {
-                ai.roles[role] = 0;
-            }
-            ai.roles[role] += count;
-            logMessage(`AI (${ai.name}) allocated ${count} servers to ${role}.`);
-        };
-
-        if (choice < 0.5) { // 50% chance to allocate to SaaS
-            const randomCategory = gameState.saasCategories[Math.floor(Math.random() * gameState.saasCategories.length)];
-            allocate(randomCategory, serversToAllocate);
-        } else if (choice < 0.8) { // 30% chance to allocate to Research
-            const existingSaaS = gameState.saasCategories.filter(cat => (ai.roles[cat] || 0) > 0);
-            if (Math.random() < 0.5 && existingSaaS.length > 0) {
-                const catToDefend = existingSaaS[Math.floor(Math.random() * existingSaaS.length)];
-                allocate(`research-${catToDefend}`, serversToAllocate);
+    if (choice < 0.4) { // 40% chance to build SaaS
+        if (ai.money >= AI_SAAS_COST * 2) { // Keep a cash buffer
+            ai.money -= AI_SAAS_COST;
+            allocate(randomCategory, 1);
+        }
+    } else if (choice < 0.7) { // 30% chance to build Research
+        if (ai.money >= AI_RESEARCH_COST * 2) {
+            ai.money -= AI_RESEARCH_COST;
+            if (Math.random() < 0.5) {
+                allocate(`research-${randomCategory}`, 1);
             } else {
-                allocate('research', serversToAllocate);
+                allocate('research', 1);
             }
-        } else { // 20% chance to allocate to Development
-            const existingSaaS = gameState.saasCategories.filter(cat => (ai.roles[cat] || 0) > 0);
-            if (existingSaaS.length > 0) {
-                const catToDevelop = existingSaaS[Math.floor(Math.random() * existingSaaS.length)];
-                allocate(`dev-${catToDevelop}`, serversToAllocate);
-            } else {
-                // Fallback to SaaS
-                const randomCategory = gameState.saasCategories[Math.floor(Math.random() * gameState.saasCategories.length)];
-                allocate(randomCategory, serversToAllocate);
-            }
+        }
+    } else { // 30% chance to build Development
+        if (ai.money >= AI_DEV_COST * 2) {
+            ai.money -= AI_DEV_COST;
+            allocate(`dev-${randomCategory}`, 1);
         }
     }
 }
