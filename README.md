@@ -103,6 +103,6 @@ We’re still in **design phase**. Contributions welcome:
 ---
 
 ## 📜 License
-MIT — free to use, hack, and expand.  
+Apache 2.0 — free to use, hack, and expand.  
 
 ---
