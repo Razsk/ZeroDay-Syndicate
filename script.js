@@ -1040,7 +1040,6 @@ function initCharts() {
     }, 100);
 }
 
-=======
 function animateZDEs() {
     const container = document.getElementById('zde-display');
     if (!container) return;
