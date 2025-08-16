@@ -56,7 +56,7 @@
     flex-grow: 1;
     display: grid;
     grid-template-columns: 1fr 1.2fr 1fr;
-    grid-template-rows: 2fr 1fr auto;
+    grid-template-rows: 2fr 1fr 1fr 1fr;
     gap: 16px;
     min-height: 0;
   }
@@ -68,11 +68,11 @@
     min-height: 0; /* Prevents charts from infinitely growing the container */
   }
   #player-tile { grid-column: 1; grid-row: 1 / 3; }
-  #server-mgt-tile { grid-column: 2; grid-row: 1 / 4; }
+  #server-mgt-tile { grid-column: 2; grid-row: 1 / 5; }
   #ai-tile { grid-column: 3; grid-row: 1 / 3; }
   #cash-flow-tile { grid-column: 1; grid-row: 3; }
   #market-share-tile { grid-column: 1; grid-row: 4; }
-  #log-tile { grid-column: 2; grid-row: 5; }
+  #log-tile { grid-column: 3; grid-row: 3 / 5; }
   #zde-tile { grid-column: 1 / 4; grid-row: 6; }
 
   .tile__head{ display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:12px; flex-shrink: 0; }
@@ -99,9 +99,10 @@
   .server-market { padding: 12px; border: 1px dashed var(--line); border-radius: 8px; text-align: center; flex-basis: 20%; }
   .market-item { display: inline-flex; flex-direction: column; align-items: center; gap: 6px; }
   .server-market .server-draggable {
-    width: 24px; height: 24px; background: var(--am);
-    border: 1px solid var(--line); border-radius: 4px;
+    width: 28px; height: 28px; background: var(--am);
+    border: 1px solid var(--line);
     cursor: grab;
+    clip-path: polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%);
   }
   .player-server {
       width: 28px; height: 28px;
@@ -295,7 +296,7 @@
 
     <!-- CHARTS -->
     <div class="tile chart-tile" id="cash-flow-tile">
-        <div class="tile__head"><div class="brand">CASH FLOW</div></div>
+        <div class="tile__head"><div class="brand cy glow">CASH FLOW</div></div>
         <canvas id="cash-flow-chart"></canvas>
     </div>
     <div class="tile chart-tile" id="market-share-tile">
@@ -354,7 +355,7 @@ const ZDE_DISCOVERY_CHANCE = 0.1; // 10% per research server per tick
 const ZDE_ATTACK_POWER = 3000;
 
 // Content Generation
-const SAAS_CATEGORIES = ["Social Media", "Streaming Service", "Cloud Storage", "VPN Provider", "Online Gaming", "Crypto Exchange", "E-commerce Platform", "Music Production", "Fitness Tracker", "Ad Blocker"];
+const ALL_SAAS_CATEGORIES = ["Social Media", "Streaming Service", "Cloud Storage", "VPN Provider", "Online Gaming", "Crypto Exchange", "E-commerce Platform", "Music Production", "Fitness Tracker", "Ad Blocker"];
 const NAME_PREFIX = ["Cyber", "Neuro", "Hex", "Data", "Quantum", "Astro", "ZeroDay", "Bio", "Giga", "Tera", "Peta", "Exa"];
 const NAME_CORE = ["Core", "Cortex", "Matrix", "Chain", "Pulse", "Ware", "Logic", "Sec", "Grid", "Node", "Link", "Net"];
 const NAME_SUFFIX = ["Syndicate", "Dynamics", "Systems", "Collective", "Labs", "Group", "Corp", "Ventures", "Holdings", "Solutions", "Enterprises"];
@@ -364,14 +365,17 @@ let gameLoopInterval = null;
 let cashFlowChart = null;
 let marketShareChart = null;
 
-function initMarketShareChart() {
+function initMarketShareChart(categories) {
+    if (marketShareChart) {
+        marketShareChart.destroy();
+    }
     const ctx = E.charts.marketShare.getContext('2d');
-    const datasets = SAAS_CATEGORIES.map((cat, i) => {
+    const datasets = categories.map((cat, i) => {
         return {
             label: cat,
             data: [],
-            backgroundColor: `hsla(${i * 60}, 100%, 70%, 0.2)`,
-            borderColor: `hsla(${i * 60}, 100%, 70%, 1)`,
+            backgroundColor: `hsla(${i * (360 / categories.length)}, 100%, 70%, 0.2)`,
+            borderColor: `hsla(${i * (360 / categories.length)}, 100%, 70%, 1)`,
             fill: false,
         }
     });
@@ -527,7 +531,7 @@ function renderHexGrid(entity, svgEl) {
         const hex = document.createElementNS('http://www.w3.org/2000/svg', 'polygon');
         hex.setAttribute('points', hexPoints(cx, cy));
         hex.setAttribute('class','hex');
-        let fill_role = SAAS_CATEGORIES.includes(role) ? 'saas' : role;
+        let fill_role = gameState.saasCategories.includes(role) ? 'saas' : role;
         if (role.startsWith('dev-')) fill_role = 'dev';
         if (role.startsWith('research-')) fill_role = 'research';
         hex.setAttribute('fill', ROLE_FILL[fill_role] || '#333');
@@ -572,19 +576,19 @@ function getTotalServers(entity) {
 }
 
 function getSaasServers(entity) {
-    return SAAS_CATEGORIES.reduce((total, cat) => total + (entity.roles[cat] || 0), 0);
+    return gameState.saasCategories.reduce((total, cat) => total + (entity.roles[cat] || 0), 0);
 }
 
 function getTotalResearchServers(entity) {
     const general = entity.roles.research || 0;
-    const specific = SAAS_CATEGORIES.reduce((total, cat) => total + (entity.roles[`research-${cat}`] || 0), 0);
+    const specific = gameState.saasCategories.reduce((total, cat) => total + (entity.roles[`research-${cat}`] || 0), 0);
     return general + specific;
 }
 
 function updateUI() {
     // Stats
     let playerIncome = PASSIVE_INCOME;
-    SAAS_CATEGORIES.forEach(cat => {
+    gameState.saasCategories.forEach(cat => {
         const market = gameState.market[cat];
         playerIncome += (market.playerShare || 0) * (market.player * SAAS_INCOME);
     });
@@ -671,10 +675,10 @@ function runAI() {
         };
 
         if (choice < 0.5) { // 50% chance to allocate to SaaS
-            const randomCategory = SAAS_CATEGORIES[Math.floor(Math.random() * SAAS_CATEGORIES.length)];
+            const randomCategory = gameState.saasCategories[Math.floor(Math.random() * gameState.saasCategories.length)];
             allocate(randomCategory, serversToAllocate);
         } else if (choice < 0.8) { // 30% chance to allocate to Research
-            const existingSaaS = SAAS_CATEGORIES.filter(cat => (ai.roles[cat] || 0) > 0);
+            const existingSaaS = gameState.saasCategories.filter(cat => (ai.roles[cat] || 0) > 0);
             if (Math.random() < 0.5 && existingSaaS.length > 0) {
                 const catToDefend = existingSaaS[Math.floor(Math.random() * existingSaaS.length)];
                 allocate(`research-${catToDefend}`, serversToAllocate);
@@ -682,13 +686,13 @@ function runAI() {
                 allocate('research', serversToAllocate);
             }
         } else { // 20% chance to allocate to Development
-            const existingSaaS = SAAS_CATEGORIES.filter(cat => (ai.roles[cat] || 0) > 0);
+            const existingSaaS = gameState.saasCategories.filter(cat => (ai.roles[cat] || 0) > 0);
             if (existingSaaS.length > 0) {
                 const catToDevelop = existingSaaS[Math.floor(Math.random() * existingSaaS.length)];
                 allocate(`dev-${catToDevelop}`, serversToAllocate);
             } else {
                 // Fallback to SaaS
-                const randomCategory = SAAS_CATEGORIES[Math.floor(Math.random() * SAAS_CATEGORIES.length)];
+                const randomCategory = gameState.saasCategories[Math.floor(Math.random() * gameState.saasCategories.length)];
                 allocate(randomCategory, serversToAllocate);
             }
         }
@@ -701,7 +705,7 @@ function gameTick() {
     // 0. Process Sabotage Effects
     ['player', 'ai'].forEach(entityType => {
         const entity = gameState[entityType];
-        SAAS_CATEGORIES.forEach(cat => {
+        gameState.saasCategories.forEach(cat => {
             if (entity.sabotageEffect[cat] > 0) {
                 const defenseServers = entity.roles[`research-${cat}`] || 0;
                 const sabotagePower = defenseServers > 0 ? 0.6 : 0.3; // Defended vs. Undefended
@@ -715,7 +719,7 @@ function gameTick() {
     });
 
     // 1. Process Development
-    SAAS_CATEGORIES.forEach(cat => {
+    gameState.saasCategories.forEach(cat => {
         // Player
         const playerDevCount = gameState.player.roles[`dev-${cat}`] || 0;
         if (playerDevCount > 0) {
@@ -737,7 +741,7 @@ function gameTick() {
     let totalPlayerIncome = PASSIVE_INCOME;
     let totalAiIncome = PASSIVE_INCOME;
 
-    SAAS_CATEGORIES.forEach(cat => {
+    gameState.saasCategories.forEach(cat => {
         const market = gameState.market[cat];
         market.player = gameState.player.roles[cat] || 0;
         market.ai = gameState.ai.roles[cat] || 0;
@@ -799,9 +803,11 @@ function gameTick() {
     cashFlowChart.update();
 
     marketShareChart.data.labels = gameState.chartLabels;
-    SAAS_CATEGORIES.forEach((cat, i) => {
+    gameState.saasCategories.forEach((cat, i) => {
         gameState.marketShareHistory[cat].push(gameState.market[cat].playerShare);
-        marketShareChart.data.datasets[i].data = gameState.marketShareHistory[cat];
+        if (marketShareChart.data.datasets[i]) {
+            marketShareChart.data.datasets[i].data = gameState.marketShareHistory[cat];
+        }
     });
     marketShareChart.update();
 
@@ -819,8 +825,10 @@ function gameTick() {
 function initGame() {
     if (gameLoopInterval) clearInterval(gameLoopInterval);
 
+    const selectedCategories = ALL_SAAS_CATEGORIES.sort(() => 0.5 - Math.random()).slice(0, 4);
+
     const initialRoles = {};
-    SAAS_CATEGORIES.forEach(cat => {
+    selectedCategories.forEach(cat => {
         initialRoles[cat] = 0;
         initialRoles[`dev-${cat}`] = 0;
         initialRoles[`research-${cat}`] = 0;
@@ -828,12 +836,13 @@ function initGame() {
     initialRoles.research = 1;
 
     const playerRoles = {...initialRoles};
-    playerRoles[SAAS_CATEGORIES[0]] = 2;
+    playerRoles[selectedCategories[0]] = 2;
 
     const aiRoles = {...initialRoles};
-    aiRoles[SAAS_CATEGORIES[1]] = 3;
+    aiRoles[selectedCategories[1]] = 3;
 
     gameState = {
+        saasCategories: selectedCategories,
         player: { money: 10000, roles: playerRoles, zdes: [], unallocatedServers: 2, cashFlowHistory: [], sabotageEffect: {} },
         ai: { money: 10000, roles: aiRoles, zdes: [], unallocatedServers: 1, name: generateSyndicateName(), cashFlowHistory: [], sabotageEffect: {} },
         tick: 0,
@@ -842,7 +851,7 @@ function initGame() {
         marketShareHistory: {}
     };
 
-    SAAS_CATEGORIES.forEach(cat => {
+    gameState.saasCategories.forEach(cat => {
         gameState.market[cat] = {
             player: 0,
             ai: 0,
@@ -860,7 +869,7 @@ function initGame() {
     updateUI();
     renderServers();
     initCashFlowChart();
-    initMarketShareChart();
+    initMarketShareChart(gameState.saasCategories);
     gameLoopInterval = setInterval(gameTick, TICK_INTERVAL);
 }
 
@@ -888,7 +897,15 @@ function loadGame() {
         if (savedState) {
             if (gameLoopInterval) clearInterval(gameLoopInterval);
             gameState = JSON.parse(savedState);
+
+            // If loading a save from before categories were randomized, initialize them.
+            if (!gameState.saasCategories) {
+                gameState.saasCategories = ALL_SAAS_CATEGORIES.slice(0, 4);
+            }
+
             logMessage("Game state loaded from save.");
+            initMarketShareChart(gameState.saasCategories);
+            initCashFlowChart();
             updateUI();
             gameLoopInterval = setInterval(gameTick, TICK_INTERVAL);
             alert("Game Loaded!");
@@ -964,7 +981,7 @@ function initDragAndDrop() {
                 gameState.player.money += damage;
                 logMessage(`Attack successful with ${zde.name}! You stole $${Math.floor(damage)} from ${gameState.ai.name}.`);
             } else if (action === 'sabotage') {
-                const targetableCategories = SAAS_CATEGORIES.filter(cat => gameState.ai.roles[cat] > 0);
+                const targetableCategories = gameState.saasCategories.filter(cat => gameState.ai.roles[cat] > 0);
                 if (targetableCategories.length > 0) {
                     const targetCategory = targetableCategories[Math.floor(Math.random() * targetableCategories.length)];
                     gameState.ai.sabotageEffect[targetCategory] = 10; // Sabotage for 10 ticks
@@ -1028,12 +1045,15 @@ function initDragAndDrop() {
 
     interact('#unallocated-pool').dropzone(dropzoneOptions);
     interact('#research-dropzone').dropzone(dropzoneOptions);
-    SAAS_CATEGORIES.forEach(cat => {
-        const catId = cat.replace(/\s+/g, '-');
-        interact(`#${catId}-dropzone`).dropzone(dropzoneOptions);
-        interact(`#dev-${catId}-dropzone`).dropzone(dropzoneOptions);
-        interact(`#research-${catId}-dropzone`).dropzone(dropzoneOptions);
-    });
+
+    if (gameState.saasCategories) {
+        gameState.saasCategories.forEach(cat => {
+            const catId = cat.replace(/\s+/g, '-');
+            interact(`#${catId}-dropzone`).dropzone(dropzoneOptions);
+            interact(`#dev-${catId}-dropzone`).dropzone(dropzoneOptions);
+            interact(`#research-${catId}-dropzone`).dropzone(dropzoneOptions);
+        });
+    }
 }
 
 function createServerElement(origin, id) {
@@ -1060,7 +1080,7 @@ function renderServers() {
     devContainer.innerHTML = '';
     researchContainer.innerHTML = '';
 
-    SAAS_CATEGORIES.forEach(cat => {
+    gameState.saasCategories.forEach(cat => {
         const catId = cat.replace(/\s+/g, '-');
 
         // SaaS Dropzones
