@@ -45,6 +45,27 @@
       <div id="hex-ui-container">
           <!-- Hexagonal UI will be rendered here by script -->
           <svg id="main-hex-svg" width="100%" height="100%"></svg>
+
+          <!-- Floating Charts -->
+          <div id="cash-chart-container" class="tile chart-tile">
+              <div class="tile__head">
+                  <div class="brand">CASH OVER TIME</div>
+                  <button class="btn-collapse" data-target="cash-chart-container">-</button>
+              </div>
+              <div class="tile__body">
+                  <canvas id="cash-chart"></canvas>
+              </div>
+          </div>
+
+          <div id="market-chart-container" class="tile chart-tile">
+              <div class="tile__head">
+                  <div class="brand">MARKET SHARE</div>
+                  <button class="btn-collapse" data-target="market-chart-container">-</button>
+              </div>
+              <div class="tile__body">
+                  <canvas id="market-chart"></canvas>
+              </div>
+          </div>
       </div>
       <div class="side-panels">
           <!-- SERVER MARKET -->
