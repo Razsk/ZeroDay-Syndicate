@@ -19,6 +19,8 @@ const NAME_SUFFIX = ["Syndicate", "Dynamics", "Systems", "Collective", "Labs", "
 
 let gameState = {};
 let gameLoopInterval = null;
+let cashChart = null;
+let marketChart = null;
 
 // Element cache
 const E = {
@@ -341,6 +343,21 @@ function updateUI() {
     renderMainHexUI(); // New main UI renderer
     renderHexGrid(gameState.ai, E.ai.svg); // Keep AI grid for now
     renderZDEs();
+
+    // Update charts
+    if (cashChart && gameState.history?.cash) {
+        cashChart.data.labels = gameState.history.cash.map(h => `T${h.tick}`);
+        cashChart.data.datasets[0].data = gameState.history.cash.map(h => h.player);
+        cashChart.data.datasets[1].data = gameState.history.cash.map(h => h.ai);
+        cashChart.update('none');
+    }
+
+    if (marketChart && gameState.market && gameState.saasCategories) {
+        marketChart.data.labels = gameState.saasCategories;
+        marketChart.data.datasets[0].data = gameState.saasCategories.map(cat => gameState.market[cat]?.playerShare || 0);
+        marketChart.data.datasets[1].data = gameState.saasCategories.map(cat => gameState.market[cat]?.aiShare || 0);
+        marketChart.update('none');
+    }
 }
 
 function renderZDEs() {
@@ -501,6 +518,20 @@ function gameTick() {
     gameState.player.money += totalPlayerIncome;
     gameState.ai.money += totalAiIncome;
 
+    // Record cash history
+    if (gameState.history && gameState.history.cash) {
+        gameState.history.cash.push({
+            tick: gameState.tick,
+            player: gameState.player.money,
+            ai: gameState.ai.money
+        });
+        // Keep history from getting too large
+        if (gameState.history.cash.length > 50) {
+            gameState.history.cash.shift();
+        }
+    }
+
+
     // 2. ZDE Discovery
     const playerResearchTotal = getTotalResearchServers(gameState.player, 'player');
     for (let i = 0; i < playerResearchTotal; i++) {
@@ -564,6 +595,9 @@ function initGame() {
         ai: { money: 10000, roles: { research: 1 }, servers: aiServers, zdes: [], name: generateSyndicateName(), sabotageEffect: {} },
         tick: 0,
         market: {},
+        history: {
+            cash: [], // Stores {tick: X, player: Y, ai: Z}
+        },
     };
 
     gameState.saasCategories.forEach(cat => {
@@ -636,6 +670,23 @@ E.buttons.help.addEventListener('click', () => { E.helpModal.style.display = 'fl
 E.buttons.helpClose.addEventListener('click', () => { E.helpModal.style.display = 'none'; });
 E.helpModal.addEventListener('click', (e) => { if(e.target === E.helpModal) E.helpModal.style.display = 'none'; });
 
+document.querySelectorAll('.btn-collapse').forEach(button => {
+    button.addEventListener('click', (e) => {
+        const targetId = e.currentTarget.dataset.target;
+        const chartTile = document.getElementById(targetId);
+        if (chartTile) {
+            const isCollapsed = chartTile.classList.toggle('is-collapsed');
+            e.currentTarget.textContent = isCollapsed ? '+' : '-';
+            // Disable interactjs resizing when collapsed
+            if (interact.isSet(chartTile)) {
+                interact(chartTile).resizable({
+                    enabled: !isCollapsed
+                });
+            }
+        }
+    });
+});
+
 
 /* ---------- DRAG & DROP LOGIC ---------- */
 const dragListeners = {
@@ -672,6 +723,65 @@ function initDragAndDrop() {
 
     interact('.server-draggable').draggable({ ...dragListeners });
     interact('.zde-item').draggable({ ...dragListeners });
+
+    // Make chart tiles draggable and resizable
+    interact('.chart-tile')
+        .draggable({
+            allowFrom: '.tile__head',
+            inertia: true,
+            modifiers: [
+                interact.modifiers.restrictRect({
+                    restriction: 'parent',
+                    endOnly: true
+                })
+            ],
+            listeners: {
+                move: function (event) {
+                    const target = event.target;
+                    let x = (parseFloat(target.getAttribute('data-x')) || 0) + event.dx;
+                    let y = (parseFloat(target.getAttribute('data-y')) || 0) + event.dy;
+
+                    target.style.transform = `translate(${x}px, ${y}px)`;
+
+                    target.setAttribute('data-x', x);
+                    target.setAttribute('data-y', y);
+                }
+            }
+        })
+        .resizable({
+            edges: { top: true, left: true, bottom: true, right: true },
+            listeners: {
+                move: function (event) {
+                    const target = event.target;
+                    let x = (parseFloat(target.getAttribute('data-x')) || 0);
+                    let y = (parseFloat(target.getAttribute('data-y')) || 0);
+
+                    // update the element's style
+                    target.style.width = event.rect.width + 'px';
+                    target.style.height = event.rect.height + 'px';
+
+                    // translate when resizing from top or left edges
+                    x += event.deltaRect.left;
+                    y += event.deltaRect.top;
+
+                    target.style.transform = 'translate(' + x + 'px,' + y + 'px)';
+
+                    target.setAttribute('data-x', x);
+                    target.setAttribute('data-y', y);
+
+                    // Resize charts on container resize
+                    if(cashChart) cashChart.resize();
+                    if(marketChart) marketChart.resize();
+                }
+            },
+            modifiers: [
+                interact.modifiers.restrictSize({
+                    min: { width: 250, height: 150 }
+                })
+            ],
+            inertia: true
+        });
+
 
     const zdeDropzoneOptions = {
         ondragenter: onDropzoneEnter,
@@ -757,6 +867,125 @@ function initDragAndDrop() {
     }, 100);
 }
 
+function initCharts() {
+    // Wait a moment for the DOM to be ready
+    setTimeout(() => {
+        const cashCtx = document.getElementById('cash-chart')?.getContext('2d');
+        const marketCtx = document.getElementById('market-chart')?.getContext('2d');
+
+        if (!cashCtx || !marketCtx) {
+            console.error("Chart canvas elements not found!");
+            return;
+        }
+
+        const chartFont = {
+            family: "'Roboto Mono', monospace",
+        };
+
+        const commonOptions = {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    labels: { color: 'var(--txt)', font: chartFont }
+                }
+            },
+            scales: {
+                y: {
+                    ticks: { color: 'var(--txt)', font: chartFont },
+                    grid: { color: 'rgba(255,255,255,0.1)' }
+                },
+                x: {
+                    ticks: { color: 'var(--txt)', font: chartFont },
+                    grid: { color: 'rgba(255,255,255,0.1)' }
+                }
+            }
+        };
+
+        cashChart = new Chart(cashCtx, {
+            type: 'line',
+            data: {
+                labels: [], // Ticks
+                datasets: [
+                    {
+                        label: 'Player Cash',
+                        data: [],
+                        borderColor: 'var(--cy)',
+                        backgroundColor: 'rgba(0, 255, 255, 0.1)',
+                        tension: 0.3,
+                        fill: true
+                    },
+                    {
+                        label: 'AI Cash',
+                        data: [],
+                        borderColor: 'var(--rd)',
+                        backgroundColor: 'rgba(255, 51, 102, 0.1)',
+                        tension: 0.3,
+                        fill: true
+                    }
+                ]
+            },
+            options: commonOptions
+        });
+
+        marketChart = new Chart(marketCtx, {
+            type: 'bar',
+            data: {
+                labels: [], // Categories
+                datasets: [
+                    {
+                        label: 'Player',
+                        data: [],
+                        backgroundColor: 'var(--cy)',
+                    },
+                    {
+                        label: 'AI',
+                        data: [],
+                        backgroundColor: 'var(--rd)',
+                    }
+                ]
+            },
+            options: {
+                ...commonOptions,
+                indexAxis: 'y',
+                scales: {
+                    x: {
+                        stacked: true,
+                        max: 1,
+                        ticks: { color: 'var(--txt)', font: chartFont, callback: value => (value * 100) + '%' },
+                        grid: { color: 'rgba(255,255,255,0.1)' }
+                    },
+                    y: {
+                        stacked: true,
+                        ticks: { color: 'var(--txt)', font: chartFont },
+                        grid: { display: false }
+                    }
+                },
+                plugins: {
+                     legend: {
+                        position: 'top',
+                        labels: { color: 'var(--txt)', font: chartFont }
+                    },
+                    tooltip: {
+                        callbacks: {
+                            label: function(context) {
+                                let label = context.dataset.label || '';
+                                if (label) { label += ': '; }
+                                if (context.parsed.x !== null) {
+                                    label += (context.parsed.x * 100).toFixed(0) + '%';
+                                }
+                                return label;
+                            }
+                        }
+                    }
+                }
+            }
+        });
+    }, 100);
+}
+
+
 // Initialize the game
 initGame();
+initCharts();
 initDragAndDrop();
