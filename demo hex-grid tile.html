@@ -1,0 +1,253 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>ZeroDay Syndicate — Hex-Grid Tile (Starter)</title>
+<style>
+  :root{
+    /* Palette */
+    --bg:#0A0A0F; --panel:#0F1117; --line:#1F2330;
+    --cy:#00FFFF;   /* SaaS */
+    --mg:#FF00FF;   /* Research */
+    --am:#FFBF00;   /* Development */
+    --imm:#9CFFB0;  /* Immune ring */
+    --rd:#FF3366;   /* Breach/Vulnerable notch */
+    --silent:#89C4FF; /* Silent monitor icon */
+    --txt:#D8E1FF;
+  }
+  html,body{height:100%}
+  body{
+    margin:0; background:radial-gradient(1200px 800px at 70% -10%, #101423 0%, var(--bg) 60%);
+    color:var(--txt); font:14px/1.4 system-ui, Segoe UI, Roboto, Arial, sans-serif;
+    display:grid; place-items:center; padding:24px;
+  }
+  .tile{
+    width:min(96vw, 980px); background:linear-gradient(180deg, #0F1117 0%, #0a0c12 100%);
+    border:1px solid #151a26; border-radius:16px; padding:16px 16px 12px;
+    box-shadow:0 0 0 1px #0a0c12, 0 16px 40px rgba(0,0,0,.6), inset 0 0 60px rgba(0,255,255,.04);
+  }
+  .tile__head{
+    display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:8px;
+  }
+  .brand{
+    display:flex; align-items:center; gap:10px; letter-spacing:.08em; text-transform:uppercase; font-weight:700;
+  }
+  .pill{font:12px/1 system-ui; padding:4px 8px; border-radius:999px; border:1px solid #263147; background:#0b0f18;}
+  .legend{display:flex; align-items:center; gap:10px; margin-top:8px; color:#9fb0d0}
+  .key{display:inline-flex; align-items:center; gap:6px; font-size:12px}
+  .dot{width:10px; height:10px; border-radius:2px; box-shadow:0 0 10px currentColor}
+  .cy{color:var(--cy)} .mg{color:var(--mg)} .am{color:var(--am)}
+  .note{color:#8aa0c9; font-size:12px; margin-left:auto}
+  /* SVG sizing wrapper */
+  .gridwrap{
+    position:relative; overflow:hidden; border-radius:12px; border:1px solid #1b2233;
+    background:
+      radial-gradient(600px 240px at 20% -40%, rgba(0,255,255,.10), transparent 60%),
+      radial-gradient(600px 240px at 90% -30%, rgba(255,0,255,.08), transparent 60%),
+      linear-gradient(180deg, rgba(255,255,255,.03), rgba(255,255,255,0));
+  }
+  /* Tooltip */
+  .tooltip{
+    position:fixed; pointer-events:none; z-index:10;
+    padding:6px 8px; font:12px/1.2 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    background:#0a1120; border:1px solid #1e2a44; border-radius:8px; color:#cfe3ff;
+    box-shadow:0 8px 30px rgba(0,0,0,.5);
+    transform:translate(-50%,-120%); opacity:0; transition:opacity .12s ease;
+    white-space:nowrap;
+  }
+  /* Hex default stroke (cluster outline is per element) */
+  .hex{
+    filter: drop-shadow(0 0 2px rgba(0,0,0,.7));
+    transition:filter .08s ease, opacity .08s ease;
+    cursor:pointer;
+  }
+  .hex:hover{
+    filter: drop-shadow(0 0 12px rgba(0,255,255,.25)) drop-shadow(0 0 20px rgba(255,0,255,.20));
+  }
+  /* State overlays */
+  .immune-ring{ fill:none; stroke:var(--imm); stroke-width:2; opacity:.95; }
+  .vuln-notch{ fill:var(--rd); opacity:.9; }
+  .eye{ fill:none; stroke:var(--silent); stroke-width:1.5; }
+  .eye-pupil{ fill:var(--silent) }
+
+  /* Tiny helper for header badge glow */
+  .glow{ text-shadow:0 0 10px currentColor, 0 0 18px currentColor; }
+
+  @media (max-width: 720px){
+    .legend{flex-wrap:wrap}
+  }
+</style>
+</head>
+<body>
+
+<div class="tile" id="tile">
+  <div class="tile__head">
+    <div class="brand">
+      <span style="color:var(--cy)" class="glow">BLACKCASK</span>
+      <span class="pill">Servers: <b id="srvTotal">0</b></span>
+      <span class="pill">Clusters: <b id="clTotal">0</b></span>
+      <span class="pill">Mix: <span style="color:var(--cy)">SaaS</span>/<span style="color:var(--mg)">R</span>/<span style="color:var(--am)">Dev</span>
+        <b id="mix">0/0/0</b></span>
+    </div>
+    <div class="note">Demo hex-grid tile • click hexes</div>
+  </div>
+
+  <div class="gridwrap">
+    <!-- SVG grid injected by JS -->
+    <svg id="hexsvg" width="100%" height="520" viewBox="0 0 940 520" role="img" aria-label="Hex grid"></svg>
+  </div>
+
+  <div class="legend">
+    <span class="key cy"><span class="dot" style="background:var(--cy)"></span> SaaS</span>
+    <span class="key mg"><span class="dot" style="background:var(--mg)"></span> Research</span>
+    <span class="key am"><span class="dot" style="background:var(--am)"></span> Development</span>
+    <span class="key" style="color:var(--imm)"><svg width="14" height="10" viewBox="0 0 20 12" style="vertical-align:-2px"><ellipse cx="10" cy="6" rx="8" ry="4" fill="none" stroke="currentColor" stroke-width="2"/></svg> Immune</span>
+    <span class="key" style="color:var(--rd)"><span class="dot" style="background:var(--rd); clip-path:polygon(50% 0,100% 50%,50% 50%); width:12px;"></span> Vulnerable notch</span>
+    <span class="key" style="color:var(--silent)"><svg width="14" height="10" viewBox="0 0 20 12" style="vertical-align:-2px"><path d="M1,6 C4,1 16,1 19,6 C16,11 4,11 1,6 Z" fill="none" stroke="currentColor" stroke-width="1.6"/><circle cx="10" cy="6" r="1.8" fill="currentColor"/></svg> Silent monitor</span>
+  </div>
+</div>
+
+<div class="tooltip" id="tip"></div>
+
+<script>
+/* ---------- Simple hex-grid generator (flat-topped) ---------- */
+const svg = document.getElementById('hexsvg');
+const tip = document.getElementById('tip');
+
+const SIZE = 18;                       // hex radius (px)
+const H = Math.sqrt(3) * SIZE;         // hex height
+const margin = 28;                     // padding around grid
+const COLS = 12, ROWS = 6;             // grid dims for demo
+const MAX = 72;                        // number of servers to draw
+
+// Roles & cluster colors
+const ROLE_FILL = { saas:'var(--cy)', research:'var(--mg)', dev:'var(--am)' };
+const CLUSTER_STROKE = {
+  A:'#2bd9ff', B:'#ff83ff', C:'#ffe082', D:'#6effa8', E:'#aab7ff'
+};
+
+// Make a point string for a hex centered at (cx,cy)
+function hexPoints(cx, cy, r=SIZE){
+  const a = Math.sqrt(3)/2 * r; // vertical offset to corners
+  const pts = [
+    [cx + r, cy],
+    [cx + r/2, cy + a],
+    [cx - r/2, cy + a],
+    [cx - r, cy],
+    [cx - r/2, cy - a],
+    [cx + r/2, cy - a],
+  ];
+  return pts.map(p => p.join(',')).join(' ');
+}
+
+// Convert axial q,r to pixel center (flat-topped)
+function axialToPixel(q, r, rsize=SIZE){
+  const x = rsize * (1.5 * q) + margin;
+  const y = (Math.sqrt(3) * rsize) * (r + q/2) + margin;
+  return [x, y];
+}
+
+// Demo data: contiguous clusters by column bands, role by bands
+function demoServerAt(index, q, r){
+  // Assign cluster bands (A,B,C,D)
+  const band = q < 3 ? 'A' : q < 6 ? 'B' : q < 9 ? 'C' : 'D';
+  // Role mix: early SaaS, then Research, then Dev
+  const role = index < 36 ? 'saas' : index < 56 ? 'research' : 'dev';
+  // Example states sprinkled in
+  const immune = (band === 'B' && role === 'saas' && (r%2===0) && q%2===1);
+  const vuln   = (band === 'C' && role !== 'dev' && r===2 && q%3===0);
+  const silent = (band === 'A' && role === 'research' && (q+r)%4===0);
+  return { cluster:band, role, immune, vulnerable:vuln, silent };
+}
+
+// Render grid
+let count=0, mix={saas:0,research:0,dev:0}, clusters={};
+const g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+svg.appendChild(g);
+
+for(let q=0;q<COLS;q++){
+  for(let r=0;r<ROWS;r++){
+    if(count >= MAX) break;
+    const s = demoServerAt(count, q, r);
+    const [cx, cy] = axialToPixel(q, r);
+    const hex = document.createElementNS('http://www.w3.org/2000/svg', 'polygon');
+    hex.setAttribute('points', hexPoints(cx, cy));
+    hex.setAttribute('class','hex');
+    hex.setAttribute('fill', ROLE_FILL[s.role]);
+    hex.setAttribute('stroke', CLUSTER_STROKE[s.cluster] || '#2a334a');
+    hex.setAttribute('stroke-width', 1.25);
+    hex.dataset.info = JSON.stringify({q,r, ...s});
+
+    // State overlays
+    const overlays = [];
+
+    if(s.immune){
+      const ring = document.createElementNS('http://www.w3.org/2000/svg', 'polygon');
+      ring.setAttribute('points', hexPoints(cx, cy, SIZE-2));
+      ring.setAttribute('class','immune-ring');
+      overlays.push(ring);
+    }
+    if(s.vulnerable){
+      // small triangle notch on NE edge
+      const notch = document.createElementNS('http://www.w3.org/2000/svg', 'polygon');
+      const p1 = [cx + SIZE*0.60, cy - (Math.sqrt(3)/2)*SIZE*0.18];
+      const p2 = [cx + SIZE*0.98, cy];
+      const p3 = [cx + SIZE*0.60, cy + (Math.sqrt(3)/2)*SIZE*0.18];
+      notch.setAttribute('points', [p1,p2,p3].map(p=>p.join(',')).join(' '));
+      notch.setAttribute('class','vuln-notch');
+      overlays.push(notch);
+    }
+    if(s.silent){
+      // minimal "eye" glyph
+      const eye = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+      const w = SIZE*.95, h = SIZE*.65;
+      eye.setAttribute('d', `
+        M ${cx-w/2},${cy} 
+        C ${cx-w/4},${cy-h/2} ${cx+w/4},${cy-h/2} ${cx+w/2},${cy}
+        C ${cx+w/4},${cy+h/2} ${cx-w/4},${cy+h/2} ${cx-w/2},${cy} Z`);
+      eye.setAttribute('class','eye');
+      const pupil = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+      pupil.setAttribute('cx', cx); pupil.setAttribute('cy', cy); pupil.setAttribute('r', SIZE*.18);
+      pupil.setAttribute('class','eye-pupil');
+      overlays.push(eye, pupil);
+    }
+
+    // Hover/tooltip
+    hex.addEventListener('mousemove', (e)=>{
+      const d = JSON.parse(e.target.dataset.info);
+      tip.style.left = e.clientX+'px';
+      tip.style.top = e.clientY+'px';
+      tip.innerHTML = `Cluster ${d.cluster} • ${d.role.toUpperCase()} • q${d.q},r${d.r}` +
+        (d.immune ? ' • IMMUNE' : '') + (d.vulnerable ? ' • VULN' : '') + (d.silent ? ' • MONITOR' : '');
+      tip.style.opacity = 1;
+    });
+    hex.addEventListener('mouseleave', ()=> tip.style.opacity = 0);
+
+    // On click: simple highlight toggle
+    hex.addEventListener('click', ()=>{
+      const current = hex.getAttribute('opacity');
+      hex.setAttribute('opacity', current === '0.55' ? '1' : '0.55');
+    });
+
+    // Append in correct z-order: base hex then overlays
+    g.appendChild(hex);
+    overlays.forEach(o => g.appendChild(o));
+
+    // Tally
+    mix[s.role]++; clusters[s.cluster] = (clusters[s.cluster]||0)+1; count++;
+  }
+}
+
+// Size SVG viewBox to fit drawn grid
+const width = SIZE * (1.5 * (COLS-1) + 2) + margin;
+const height = H * (ROWS + (COLS-1)/2) + margin;
+svg.setAttribute('viewBox', `0 0 ${Math.ceil(width)} ${Math.ceil(height)}`);
+
+// Header stats
+document.getElementById('srvTotal').textContent = count.toString();
+document.getElementById('clTotal').textContent = Object.keys(clusters).length.toString();
+document.getElementById('mix').textContent = `${mix.saas}/${mix.research}/${mix.dev}`;
+</script>
+</body>
+</html>
