@@ -9,12 +9,24 @@ const AI_SAAS_COST = 1500;
 const AI_RESEARCH_COST = 1000;
 const AI_DEV_COST = 1000;
 const PASSIVE_INCOME = 50;
-const SAAS_INCOME = 100;
+const SERVER_OPEX = 25; // Opex cost per server per tick
 const ZDE_DISCOVERY_CHANCE = 0.1; // 10% per research server per tick
 const ZDE_ATTACK_POWER = 3000;
 
 // Content Generation
-const ALL_SAAS_CATEGORIES = ["Social Media", "Streaming Service", "Cloud Storage", "VPN Provider", "Online Gaming", "Crypto Exchange", "E-commerce Platform", "Music Production", "Fitness Tracker", "Ad Blocker"];
+const SAAS_CATEGORY_DATA = {
+    "Social Media": { tam: 60000 },
+    "Streaming Service": { tam: 80000 },
+    "Cloud Storage": { tam: 50000 },
+    "VPN Provider": { tam: 40000 },
+    "Online Gaming": { tam: 70000 },
+    "Crypto Exchange": { tam: 90000 },
+    "E-commerce Platform": { tam: 75000 },
+    "Music Production": { tam: 30000 },
+    "Fitness Tracker": { tam: 35000 },
+    "Ad Blocker": { tam: 25000 }
+};
+const ALL_SAAS_CATEGORIES = Object.keys(SAAS_CATEGORY_DATA);
 const NAME_PREFIX = ["Cyber", "Neuro", "Hex", "Data", "Quantum", "Astro", "ZeroDay", "Bio", "Giga", "Tera", "Peta", "Exa"];
 const NAME_CORE = ["Core", "Cortex", "Matrix", "Chain", "Pulse", "Ware", "Logic", "Sec", "Grid", "Node", "Link", "Net"];
 const NAME_SUFFIX = ["Syndicate", "Dynamics", "Systems", "Collective", "Labs", "Group", "Corp", "Ventures", "Holdings", "Solutions", "Enterprises"];
@@ -73,11 +85,19 @@ function renderHexGrid(entity, svgEl) {
     let q = 0, r = 0, colMax = 8;
     const serverList = [];
 
-    for (const role in entity.roles) {
-        if (gameState.saasCategories.includes(role) || role === 'research' || role === 'dev') {
-            for (let i = 0; i < entity.roles[role]; i++) serverList.push(role);
+    // This function now renders the AI grid based on its new product structure
+    if (entity.products) {
+        for (const cat in entity.products) {
+            const product = entity.products[cat];
+            for (let i = 0; i < (product.saas?.serverCount || 0); i++) serverList.push(cat);
+            for (let i = 0; i < (product.research?.serverCount || 0); i++) serverList.push('research');
+            for (let i = 0; i < (product.dev?.serverCount || 0); i++) serverList.push('dev');
         }
     }
+     if (entity.research) {
+        for (let i = 0; i < (entity.research.serverCount || 0); i++) serverList.push('research');
+     }
+
 
     for (let i = 0; i < serverList.length; i++) {
         const role = serverList[i];
@@ -208,8 +228,10 @@ function renderServersInHex(svgGroup, hexCx, hexCy, radius, servers, category) {
     const server_r = 12;
     let serversToRender = [];
     ['saas', 'research', 'dev'].forEach(type => {
-        for(let i = 0; i < servers[type].length; i++) {
-            serversToRender.push(servers[type][i]);
+        // The structure is now servers[type].servers
+        const serverList = servers[type]?.servers || [];
+        for(let i = 0; i < serverList.length; i++) {
+            serversToRender.push(serverList[i]);
         }
     });
 
@@ -312,51 +334,52 @@ function generateZdeName() {
 }
 
 function getTotalServers(entity, entityType) {
+    let total = 0;
     if (entityType === 'player') {
-        let total = 0;
         if (entity.servers) {
             gameState.saasCategories.forEach(cat => {
-                total += (entity.servers[cat]?.saas.length || 0);
-                total += (entity.servers[cat]?.research.length || 0);
-                total += (entity.servers[cat]?.dev.length || 0);
+                total += (entity.servers[cat]?.saas.servers.length || 0);
+                total += (entity.servers[cat]?.research.servers.length || 0);
+                total += (entity.servers[cat]?.dev.servers.length || 0);
             });
         }
-        return total;
-    } else { // AI uses a hybrid model for now
-        return Object.values(entity.roles).reduce((a, b) => a + b, 0);
+    } else { // AI
+        if(entity.products) {
+            gameState.saasCategories.forEach(cat => {
+                total += (entity.products[cat]?.saas.serverCount || 0);
+                total += (entity.products[cat]?.research.serverCount || 0);
+                total += (entity.products[cat]?.dev.serverCount || 0);
+            });
+        }
+        total += entity.research?.serverCount || 0; // Add general research
     }
+    return total;
 }
 
 function getSaasServers(entity, entityType) {
     if (entityType === 'player') {
-        return gameState.saasCategories.reduce((total, cat) => total + (entity.servers[cat]?.saas.length || 0), 0);
+        return gameState.saasCategories.reduce((total, cat) => total + (entity.servers[cat]?.saas.servers.length || 0), 0);
     } else { // AI
-        return gameState.saasCategories.reduce((total, cat) => total + (entity.roles[cat] || 0), 0);
+        return gameState.saasCategories.reduce((total, cat) => total + (entity.products[cat]?.saas.serverCount || 0), 0);
     }
 }
 
 function getTotalResearchServers(entity, entityType) {
     if (entityType === 'player') {
-        return gameState.saasCategories.reduce((total, cat) => total + (entity.servers[cat]?.research.length || 0), 0);
+        return gameState.saasCategories.reduce((total, cat) => total + (entity.servers[cat]?.research.servers.length || 0), 0);
     } else { // AI
-        const general = entity.roles.research || 0;
-        const specific = gameState.saasCategories.reduce((total, cat) => total + (entity.roles[`research-${cat}`] || 0), 0);
+        const general = entity.research?.serverCount || 0;
+        const specific = gameState.saasCategories.reduce((total, cat) => total + (entity.products[cat]?.research.serverCount || 0), 0);
         return general + specific;
     }
 }
 
 function updateUI() {
     // Stats
-    let playerIncome = PASSIVE_INCOME;
-    gameState.saasCategories.forEach(cat => {
-        const market = gameState.market[cat];
-        const playerSaas = gameState.player.servers[cat]?.saas.length || 0;
-        if (market.playerShare > 0 && playerSaas > 0) {
-             playerIncome += market.playerShare * playerSaas * SAAS_INCOME * market.playerEfficiency;
-        }
-    });
+    // The playerIncome calculation is now handled entirely within gameTick.
+    // We just read the value from the new gameState property.
     E.player.money.textContent = Math.floor(gameState.player.money);
-    E.player.cashflow.textContent = Math.floor(playerIncome);
+    E.player.cashflow.textContent = Math.floor(gameState.player.lastTickNetRevenue || 0);
     E.player.totalServers.textContent = getTotalServers(gameState.player, 'player');
     E.ai.money.textContent = Math.floor(gameState.ai.money);
     E.ai.totalServers.textContent = getTotalServers(gameState.ai, 'ai');
@@ -439,22 +462,47 @@ function runAI() {
     const ai = gameState.ai;
     const player = gameState.player;
 
-    // RULE 1: Attack if possible and player has money
-    if (ai.zdes.length > 0 && player.money > 0) {
-        ai.zdes.pop(); // Use one ZDE
-        const damage = Math.min(ZDE_ATTACK_POWER, player.money);
-        player.money -= damage;
-        logMessage(`!!! AI ATTACK: ${ai.name} launched a ZDE, draining $${Math.floor(damage)}.`);
-        return; // End turn after a major action
+    // RULE 1: Attack with a ZDE if possible
+    if (ai.zdes.length > 0 && Object.keys(player.servers).length > 0) {
+        // Find a player category with SaaS servers to attack
+        const targetableCategories = gameState.saasCategories.filter(cat => player.servers[cat]?.saas.servers.length > 0);
+        if (targetableCategories.length > 0) {
+            ai.zdes.pop(); // Use one ZDE
+            const targetCategory = targetableCategories[Math.floor(Math.random() * targetableCategories.length)];
+            const playerSaasServers = player.servers[targetCategory].saas.servers;
+
+            // Find a cluster to breach
+            const clustersInProduct = [...new Set(playerSaasServers.map(s => s.cluster))];
+            if (clustersInProduct.length > 0) {
+                const clusterToBreach = clustersInProduct[Math.floor(Math.random() * clustersInProduct.length)];
+
+                if (!player.breachedClusters) {
+                    player.breachedClusters = {};
+                }
+                player.breachedClusters[clusterToBreach] = true;
+
+                logMessage(`!!! AI ATTACK: ${ai.name} breached your ${targetCategory} product in Cluster ${clusterToBreach}!`);
+                return; // End turn after a major action
+            }
+        }
     }
 
     // RULE 2: Decide what server to buy, and buy it if affordable
-    const allocate = (role, count) => {
-        if (!ai.roles[role]) {
-            ai.roles[role] = 0;
+    const allocate = (category, type, count) => {
+        const target = category ? `${category} ${type}` : `general ${type}`;
+        logMessage(`AI (${ai.name}) allocated ${count} servers to ${target}.`);
+
+        if (type === 'saas') {
+            ai.products[category].saas.serverCount += count;
+        } else if (type === 'research') {
+            if (category) {
+                ai.products[category].research.serverCount += count;
+            } else {
+                ai.research.serverCount += count;
+            }
+        } else if (type === 'dev') {
+            ai.products[category].dev.serverCount += count;
         }
-        ai.roles[role] += count;
-        logMessage(`AI (${ai.name}) allocated ${count} servers to ${role}.`);
     };
 
     const choice = Math.random();
@@ -463,97 +511,129 @@ function runAI() {
     if (choice < 0.4) { // 40% chance to build SaaS
         if (ai.money >= AI_SAAS_COST * 2) { // Keep a cash buffer
             ai.money -= AI_SAAS_COST;
-            allocate(randomCategory, 1);
+            allocate(randomCategory, 'saas', 1);
         }
     } else if (choice < 0.7) { // 30% chance to build Research
         if (ai.money >= AI_RESEARCH_COST * 2) {
             ai.money -= AI_RESEARCH_COST;
             if (Math.random() < 0.5) {
-                allocate(`research-${randomCategory}`, 1);
+                allocate(randomCategory, 'research', 1);
             } else {
-                allocate('research', 1);
+                allocate(null, 'research', 1); // General research
             }
         }
     } else { // 30% chance to build Development
         if (ai.money >= AI_DEV_COST * 2) {
             ai.money -= AI_DEV_COST;
-            allocate(`dev-${randomCategory}`, 1);
+            allocate(randomCategory, 'dev', 1);
         }
     }
+}
+
+function calculateEfficacy(serverCount, efficiency, ageInMonths) {
+    if (serverCount === 0) {
+        return 0;
+    }
+    const ageFactor = 1 + (ageInMonths / 12);
+    const efficacy = (serverCount * efficiency) * (1 / ageFactor);
+    return efficacy;
 }
 
 function gameTick() {
     gameState.tick++;
 
-    // 0. Process Sabotage Effects
+    // 0. Age all SaaS products
     gameState.saasCategories.forEach(cat => {
-        // Player
-        if (gameState.player.sabotageEffect[cat] > 0) {
-            const defenseServers = gameState.player.servers[cat]?.research.length || 0;
-            const sabotagePower = defenseServers > 0 ? 0.6 : 0.3;
-            gameState.market[cat].playerEfficiency = sabotagePower;
-            gameState.player.sabotageEffect[cat]--;
-        } else if (gameState.player.sabotageEffect[cat] === 0) {
-            gameState.market[cat].playerEfficiency = 1.0;
-            delete gameState.player.sabotageEffect[cat];
+        // Player products
+        const playerSaas = gameState.player.servers[cat]?.saas;
+        if (playerSaas && playerSaas.servers.length > 0) {
+            playerSaas.ageInMonths++;
         }
-        // AI
-        if (gameState.ai.sabotageEffect[cat] > 0) {
-            const defenseServers = gameState.ai.roles[`research-${cat}`] || 0;
-            const sabotagePower = defenseServers > 0 ? 0.6 : 0.3;
-            gameState.market[cat].aiEfficiency = sabotagePower;
-            gameState.ai.sabotageEffect[cat]--;
-        } else if (gameState.ai.sabotageEffect[cat] === 0) {
-            gameState.market[cat].aiEfficiency = 1.0;
-            delete gameState.ai.sabotageEffect[cat];
+        // AI products
+        const aiSaas = gameState.ai.products[cat]?.saas;
+        if (aiSaas && aiSaas.serverCount > 0) {
+            aiSaas.ageInMonths++;
         }
     });
 
     // 1. Process Development
     gameState.saasCategories.forEach(cat => {
         // Player
-        const playerDevCount = gameState.player.servers[cat]?.dev.length || 0;
+        const playerDevCount = gameState.player.servers[cat]?.dev.servers.length || 0;
         if (playerDevCount > 0) {
-            let currentEff = gameState.market[cat].playerEfficiency;
+            let currentEff = gameState.player.servers[cat].saas.efficiency;
             currentEff += playerDevCount * 0.005; // Small boost per server
-            gameState.market[cat].playerEfficiency = Math.min(2.0, currentEff); // Cap at 200%
+            gameState.player.servers[cat].saas.efficiency = Math.min(2.0, currentEff); // Cap at 200%
         }
 
         // AI
-        const aiDevCount = gameState.ai.roles[`dev-${cat}`] || 0;
+        const aiDevCount = gameState.ai.products[cat]?.dev.serverCount || 0;
         if (aiDevCount > 0) {
-            let currentEff = gameState.market[cat].aiEfficiency;
+            let currentEff = gameState.ai.products[cat].saas.efficiency;
             currentEff += aiDevCount * 0.005;
-            gameState.market[cat].aiEfficiency = Math.min(2.0, currentEff);
+            gameState.ai.products[cat].saas.efficiency = Math.min(2.0, currentEff);
         }
     });
 
-    // 2. Market Share & Revenue
-    let totalPlayerIncome = PASSIVE_INCOME;
-    let totalAiIncome = PASSIVE_INCOME;
+    // 2. Market Share & Revenue Calculation
+    let totalPlayerGrossRevenue = 0;
+    let totalAiGrossRevenue = 0;
 
     gameState.saasCategories.forEach(cat => {
         const market = gameState.market[cat];
-        market.player = gameState.player.servers[cat]?.saas.length || 0;
-        market.ai = gameState.ai.roles[cat] || 0;
-        market.total = market.player + market.ai;
+        const playerSaas = gameState.player.servers[cat].saas;
+        const aiSaas = gameState.ai.products[cat].saas;
 
-        if (market.total > 0) {
-            market.playerShare = market.player / market.total;
-            market.aiShare = market.ai / market.total;
+        // Calculate efficacy for each entity in the category
+        const playerEfficacy = calculateEfficacy(playerSaas.servers.length, playerSaas.efficiency, playerSaas.ageInMonths);
+        const aiEfficacy = calculateEfficacy(aiSaas.serverCount, aiSaas.efficiency, aiSaas.ageInMonths);
+        const totalEfficacy = playerEfficacy + aiEfficacy;
+
+        // Calculate market share
+        if (totalEfficacy > 0) {
+            market.playerShare = playerEfficacy / totalEfficacy;
+            market.aiShare = aiEfficacy / totalEfficacy;
         } else {
             market.playerShare = 0;
             market.aiShare = 0;
         }
 
-        totalPlayerIncome += market.playerShare * (market.player * SAAS_INCOME * market.playerEfficiency);
-        totalAiIncome += market.aiShare * (market.ai * SAAS_INCOME * market.aiEfficiency);
+        // Calculate gross revenue for this category
+        const categoryTam = market.tam;
+        let playerGrossRevenueForCategory = market.playerShare * categoryTam;
+        let aiGrossRevenueForCategory = market.aiShare * categoryTam;
+
+        // --- Breach Impact ---
+        // Player
+        const totalPlayerServers = playerSaas.servers.length;
+        if (totalPlayerServers > 0) {
+            const breachedServers = playerSaas.servers.filter(s => gameState.player.breachedClusters[s.cluster]).length;
+            if (breachedServers > 0) {
+                const revenueLoss = playerGrossRevenueForCategory * (breachedServers / totalPlayerServers);
+                playerGrossRevenueForCategory -= revenueLoss;
+            }
+        }
+        // AI
+        if (aiSaas.serverCount > 0 && aiSaas.breachedServerPercentage > 0) {
+            const revenueLoss = aiGrossRevenueForCategory * aiSaas.breachedServerPercentage;
+            aiGrossRevenueForCategory -= revenueLoss;
+        }
+
+        totalPlayerGrossRevenue += playerGrossRevenueForCategory;
+        totalAiGrossRevenue += aiGrossRevenueForCategory;
     });
 
-    gameState.player.money += totalPlayerIncome;
-    gameState.ai.money += totalAiIncome;
+    // 3. Calculate Net Revenue
+    const playerOpex = getTotalServers(gameState.player, 'player') * SERVER_OPEX;
+    const aiOpex = getTotalServers(gameState.ai, 'ai') * SERVER_OPEX;
+    gameState.player.lastTickNetRevenue = totalPlayerGrossRevenue - playerOpex + PASSIVE_INCOME;
+    gameState.ai.lastTickNetRevenue = totalAiGrossRevenue - aiOpex + PASSIVE_INCOME;
 
-    // Record cash history
+    gameState.player.money += gameState.player.lastTickNetRevenue;
+    gameState.ai.money += gameState.ai.lastTickNetRevenue;
+
+
+    // 4. Record cash history
     if (gameState.history && gameState.history.cash) {
         gameState.history.cash.push({
             tick: gameState.tick,
@@ -567,7 +647,7 @@ function gameTick() {
     }
 
 
-    // 2. ZDE Discovery
+    // 5. ZDE Discovery
     const playerResearchTotal = getTotalResearchServers(gameState.player, 'player');
     for (let i = 0; i < playerResearchTotal; i++) {
         if (Math.random() < ZDE_DISCOVERY_CHANCE) {
@@ -591,10 +671,10 @@ function gameTick() {
         }
     }
 
-    // 3. AI Turn
+    // 6. AI Turn
     runAI();
 
-    // 4. Update UI
+    // 7. Update UI
     updateUI();
 }
 
@@ -604,30 +684,43 @@ function initGame() {
     const selectedCategories = ALL_SAAS_CATEGORIES.sort(() => 0.5 - Math.random()).slice(0, 6);
 
     const playerServers = {};
-    const aiServers = {};
+    const aiProducts = {}; // New AI structure
     selectedCategories.forEach(cat => {
         playerServers[cat] = {
-            saas: [],
-            research: [],
-            dev: []
+            // Each role is an object containing a list of servers
+            saas: { efficiency: 1.0, ageInMonths: 0, servers: [] },
+            research: { servers: [] },
+            dev: { servers: [] }
         };
-        aiServers[cat] = { saas: 0, research: 0, dev: 0 };
+        // AI has a similar product structure, but with counts instead of server lists
+        aiProducts[cat] = {
+            saas: { efficiency: 1.0, ageInMonths: 0, serverCount: 0, breachedServerPercentage: 0 },
+            research: { serverCount: 0 },
+            dev: { serverCount: 0 }
+        };
     });
 
-    playerServers[selectedCategories[0]].saas.push({type: 'saas', id: 'p-s-1', immune: true, cluster: 'A'});
-    playerServers[selectedCategories[0]].saas.push({type: 'saas', id: 'p-s-2', vulnerable: true, cluster: 'A'});
-    playerServers[selectedCategories[1]].saas.push({type: 'saas', id: 'p-s-3', silent: true, cluster: 'B'});
-    playerServers[selectedCategories[2]].research.push({type: 'research', id: 'p-r-1', immune: false, cluster: 'C'});
-    playerServers[selectedCategories[3]].dev.push({type: 'dev', id: 'p-d-1', immune: false, cluster: 'D'});
+    // Add initial player servers to the new structure
+    playerServers[selectedCategories[0]].saas.servers.push({type: 'saas', id: 'p-s-1', immune: true, cluster: 'A'});
+    playerServers[selectedCategories[0]].saas.servers.push({type: 'saas', id: 'p-s-2', vulnerable: true, cluster: 'A'});
+    playerServers[selectedCategories[0]].saas.ageInMonths = 3; // Example age
+    playerServers[selectedCategories[0]].saas.efficiency = 1.1; // Example efficiency
 
+    playerServers[selectedCategories[1]].saas.servers.push({type: 'saas', id: 'p-s-3', silent: true, cluster: 'B'});
+    playerServers[selectedCategories[2]].research.servers.push({type: 'research', id: 'p-r-1', immune: false, cluster: 'C'});
+    playerServers[selectedCategories[3]].dev.servers.push({type: 'dev', id: 'p-d-1', immune: false, cluster: 'D'});
 
-    aiServers[selectedCategories[1]].saas = 3;
+    // Add initial AI servers
+    aiProducts[selectedCategories[1]].saas.serverCount = 3;
+    aiProducts[selectedCategories[1]].saas.ageInMonths = 5;
+    aiProducts[selectedCategories[1]].saas.efficiency = 0.9;
 
+    const initialAiResearch = { serverCount: 1 }; // General research servers for AI
 
     gameState = {
         saasCategories: selectedCategories,
-        player: { money: 10000, servers: playerServers, zdes: [], sabotageEffect: {} },
-        ai: { money: 10000, roles: { research: 1 }, servers: aiServers, zdes: [], name: generateSyndicateName(), sabotageEffect: {} },
+        player: { money: 10000, servers: playerServers, zdes: [], breachedClusters: {}, lastTickNetRevenue: 0 },
+        ai: { money: 10000, products: aiProducts, research: initialAiResearch, zdes: [], name: generateSyndicateName(), lastTickNetRevenue: 0 },
         tick: 0,
         market: {},
         history: {
@@ -635,13 +728,16 @@ function initGame() {
         },
     };
 
+    // Initialize market data, now including TAM
     gameState.saasCategories.forEach(cat => {
         gameState.market[cat] = {
+            tam: SAAS_CATEGORY_DATA[cat].tam,
             player: 0,
             ai: 0,
             total: 0,
             playerShare: 0,
             aiShare: 0,
+            // These two are deprecated by the new product-specific efficiency model
             playerEfficiency: 1.0,
             aiEfficiency: 1.0,
         };
@@ -887,11 +983,15 @@ function initDragAndDrop() {
                 gameState.player.money += damage;
                 logMessage(`Attack successful with ${zde.name}! You stole $${Math.floor(damage)} from ${gameState.ai.name}.`);
             } else if (action === 'sabotage') {
-                const targetableCategories = gameState.saasCategories.filter(cat => gameState.ai.roles[cat] > 0);
+                const targetableCategories = gameState.saasCategories.filter(cat => gameState.ai.products[cat]?.saas.serverCount > 0);
                 if (targetableCategories.length > 0) {
                     const targetCategory = targetableCategories[Math.floor(Math.random() * targetableCategories.length)];
-                    gameState.ai.sabotageEffect[targetCategory] = 10; // Sabotage for 10 ticks
-                    logMessage(`Sabotage successful with ${zde.name}! ${gameState.ai.name}'s ${targetCategory} efficiency is crippled.`);
+
+                    // New breach logic: assume 25% of servers are in the breached "cluster"
+                    const breachPercentage = 0.25;
+                    gameState.ai.products[targetCategory].saas.breachedServerPercentage = breachPercentage;
+
+                    logMessage(`Sabotage successful with ${zde.name}! ${gameState.ai.name}'s ${targetCategory} product is breached, causing ${breachPercentage*100}% revenue loss.`);
                 } else {
                     logMessage(`Sabotage with ${zde.name} failed. No active AI SaaS products to target.`);
                 }
@@ -931,7 +1031,7 @@ function initDragAndDrop() {
                         silent: false,
                         cluster: 'A' // default cluster
                     }
-                    gameState.player.servers[newCategory][type].push(newServer);
+                    gameState.player.servers[newCategory][type].servers.push(newServer);
                     logMessage(`Purchased ${type} server for ${newCategory} for $${cost}.`);
                     updateUI();
                 } else {
@@ -945,10 +1045,12 @@ function initDragAndDrop() {
 
                 if (oldCategory === newCategory) return; // No change
 
-                const serverIndex = gameState.player.servers[oldCategory][serverInfo.type].findIndex(s => s.id === serverInfo.id);
+                const serverList = gameState.player.servers[oldCategory][serverInfo.type].servers;
+                const serverIndex = serverList.findIndex(s => s.id === serverInfo.id);
+
                 if (serverIndex > -1) {
-                    const [serverToMove] = gameState.player.servers[oldCategory][serverInfo.type].splice(serverIndex, 1);
-                    gameState.player.servers[newCategory][serverInfo.type].push(serverToMove);
+                    const [serverToMove] = serverList.splice(serverIndex, 1);
+                    gameState.player.servers[newCategory][serverInfo.type].servers.push(serverToMove);
                     logMessage(`Moved ${serverInfo.type} server from ${oldCategory} to ${newCategory}.`);
                     updateUI();
                 }
