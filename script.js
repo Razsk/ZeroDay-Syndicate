@@ -35,7 +35,6 @@ const NAME_SUFFIX = ["Syndicate", "Dynamics", "Systems", "Collective", "Labs", "
 let gameState = {};
 let gameLoopInterval = null;
 let cashChart = null;
-let marketChart = null;
 let zdeAnimationState = {};
 
 // Element cache
@@ -189,6 +188,18 @@ function renderMainHexUI() {
         categoryHex.dataset.category = cat;
         categoryHex.classList.add('dropzone');
         g.appendChild(categoryHex);
+
+        // Add inner hex for market share
+        const playerShare = gameState.market[cat]?.playerShare || 0;
+        if (playerShare > 0) {
+            const innerHex = document.createElementNS('http://www.w3.org/2000/svg', 'polygon');
+            const innerRadius = (r_large * 0.8) * Math.sqrt(playerShare);
+            innerHex.setAttribute('points', hexPoints(cx, cy, innerRadius));
+            innerHex.setAttribute('fill', 'var(--cy)');
+            innerHex.setAttribute('fill-opacity', '0.3');
+            innerHex.style.pointerEvents = 'none'; // Make sure it doesn't interfere with clicks
+            g.appendChild(innerHex);
+        }
 
         // New label logic
         const label_distance = r_large * 2.8; // Place it further out
@@ -400,12 +411,6 @@ function updateUI() {
         cashChart.update('none');
     }
 
-    if (marketChart && gameState.market && gameState.saasCategories) {
-        marketChart.data.labels = gameState.saasCategories;
-        marketChart.data.datasets[0].data = gameState.saasCategories.map(cat => gameState.market[cat]?.playerShare || 0);
-        marketChart.data.datasets[1].data = gameState.saasCategories.map(cat => gameState.market[cat]?.aiShare || 0);
-        marketChart.update('none');
-    }
 }
 
 function renderZDEs() {
@@ -904,65 +909,6 @@ function initDragAndDrop() {
     interact('.zde-item').draggable({ ...dragListeners });
     interact('.server-hex-group').draggable({ listeners: dragListeners });
 
-    // Make chart tiles draggable and resizable
-    interact('.chart-tile')
-        .draggable({
-            allowFrom: '.tile__head',
-            inertia: true,
-            modifiers: [
-                interact.modifiers.restrictRect({
-                    restriction: 'parent',
-                    endOnly: true
-                })
-            ],
-            listeners: {
-                move: function (event) {
-                    const target = event.target;
-                    let x = (parseFloat(target.getAttribute('data-x')) || 0) + event.dx;
-                    let y = (parseFloat(target.getAttribute('data-y')) || 0) + event.dy;
-
-                    target.style.transform = `translate(${x}px, ${y}px)`;
-
-                    target.setAttribute('data-x', x);
-                    target.setAttribute('data-y', y);
-                }
-            }
-        })
-        .resizable({
-            edges: { top: true, left: true, bottom: true, right: true },
-            listeners: {
-                move: function (event) {
-                    const target = event.target;
-                    let x = (parseFloat(target.getAttribute('data-x')) || 0);
-                    let y = (parseFloat(target.getAttribute('data-y')) || 0);
-
-                    // update the element's style
-                    target.style.width = event.rect.width + 'px';
-                    target.style.height = event.rect.height + 'px';
-
-                    // translate when resizing from top or left edges
-                    x += event.deltaRect.left;
-                    y += event.deltaRect.top;
-
-                    target.style.transform = 'translate(' + x + 'px,' + y + 'px)';
-
-                    target.setAttribute('data-x', x);
-                    target.setAttribute('data-y', y);
-
-                    // Resize charts on container resize
-                    if(cashChart) cashChart.resize();
-                    if(marketChart) marketChart.resize();
-                }
-            },
-            modifiers: [
-                interact.modifiers.restrictSize({
-                    min: { width: 250, height: 150 }
-                })
-            ],
-            inertia: true
-        });
-
-
     const zdeDropzoneOptions = {
         ondragenter: onDropzoneEnter,
         ondragleave: onDropzoneLeave,
@@ -1077,9 +1023,7 @@ function initCharts() {
     // Wait a moment for the DOM to be ready
     setTimeout(() => {
         const cashCtx = document.getElementById('cash-chart')?.getContext('2d');
-        const marketCtx = document.getElementById('market-chart')?.getContext('2d');
-
-        if (!cashCtx || !marketCtx) {
+        if (!cashCtx) {
             console.error("Chart canvas elements not found!");
             return;
         }
@@ -1134,59 +1078,6 @@ function initCharts() {
             options: commonOptions
         });
 
-        marketChart = new Chart(marketCtx, {
-            type: 'bar',
-            data: {
-                labels: [], // Categories
-                datasets: [
-                    {
-                        label: 'Player',
-                        data: [],
-                        backgroundColor: 'var(--cy)',
-                    },
-                    {
-                        label: 'AI',
-                        data: [],
-                        backgroundColor: 'var(--rd)',
-                    }
-                ]
-            },
-            options: {
-                ...commonOptions,
-                indexAxis: 'y',
-                scales: {
-                    x: {
-                        stacked: true,
-                        max: 1,
-                        ticks: { color: 'var(--txt)', font: chartFont, callback: value => (value * 100) + '%' },
-                        grid: { color: 'rgba(255,255,255,0.1)' }
-                    },
-                    y: {
-                        stacked: true,
-                        ticks: { color: 'var(--txt)', font: chartFont },
-                        grid: { display: false }
-                    }
-                },
-                plugins: {
-                     legend: {
-                        position: 'top',
-                        labels: { color: 'var(--txt)', font: chartFont }
-                    },
-                    tooltip: {
-                        callbacks: {
-                            label: function(context) {
-                                let label = context.dataset.label || '';
-                                if (label) { label += ': '; }
-                                if (context.parsed.x !== null) {
-                                    label += (context.parsed.x * 100).toFixed(0) + '%';
-                                }
-                                return label;
-                            }
-                        }
-                    }
-                }
-            }
-        });
     }, 100);
 }
 
