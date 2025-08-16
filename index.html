@@ -114,7 +114,11 @@
   }
   .unallocated-server polygon { fill: #555; }
   .research-server polygon { fill: var(--mg); }
+  /* New research server styles */
+  .research-Social-Media-server polygon, .research-Streaming-Service-server polygon, .research-Cloud-Storage-server polygon, .research-VPN-Provider-server polygon, .research-Online-Gaming-server polygon, .research-Crypto-Exchange-server polygon { fill: var(--mg); }
   .dev-server polygon { fill: var(--am); }
+  /* New dev server styles */
+  .dev-Social-Media-server polygon, .dev-Streaming-Service-server polygon, .dev-Cloud-Storage-server polygon, .dev-VPN-Provider-server polygon, .dev-Online-Gaming-server polygon, .dev-Crypto-Exchange-server polygon { fill: var(--am); }
   .Social-Media-server polygon, .Streaming-Service-server polygon, .Cloud-Storage-server polygon, .VPN-Provider-server polygon, .Online-Gaming-server polygon, .Crypto-Exchange-server polygon { fill: var(--cy); }
 
   .player-server.is-dragging {
@@ -126,15 +130,32 @@
     flex-grow: 1; display: flex; flex-direction: column;
   }
   .dropzone.can-drop { background: rgba(0,255,255,.1); border-color: var(--cy); }
+  .ai-attack-dropzones .dropzone.can-drop { background: rgba(255,51,102,.15); border-color: var(--rd); }
   .allocation-dropzones { display: flex; flex-direction: column; gap: 12px; margin-top: 12px; flex-grow: 1; }
   .saas-dropzones { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .ai-attack-dropzones { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 12px; }
+  .ai-attack-dropzones .dropzone {
+      padding: 12px; text-align: center; font-weight: 700;
+      color: var(--rd); letter-spacing: .05em; text-transform: uppercase;
+      border-color: #4d2531;
+  }
 
   /* Charts */
   .chart-tile canvas { flex-grow: 1; }
 
   /* Log & ZDE */
   #log-box { width: 100%; flex-grow: 1; background: #0a0a0f; border: 1px solid var(--line); color: #8aa0c9; font-family: monospace; font-size: 12px; padding: 10px; border-radius: 8px; box-sizing: border-box; }
-  .zde-panel { padding: 12px; border: 1px dashed var(--rd); border-radius: 8px; flex-grow: 1; }
+  .zde-panel { padding: 12px; border: 1px dashed var(--rd); border-radius: 8px; flex-grow: 1; display: flex; flex-direction: column; }
+  #zde-display { display: flex; flex-wrap: wrap; gap: 8px; align-content: flex-start; flex-grow: 1; padding: 8px; background: rgba(255,0,255,0.05); border-radius: 6px; min-height: 50px; }
+  .zde-item { cursor: grab; }
+  .zde-item polygon {
+      stroke: var(--bg);
+      stroke-width: 2px;
+      fill: #39FF14; /* acid green */
+      filter: drop-shadow(0 0 8px #39FF14);
+  }
+  .zde-item.is-dragging { opacity: 0.5; cursor: grabbing; }
+
   .zde-actions { display: flex; gap: 12px; height: 100%; }
   .zde-actions button { flex-grow: 1; background: var(--rd); }
   .zde-actions button:hover { box-shadow: 0 0 15px var(--rd); }
@@ -222,11 +243,9 @@
                 </div>
             </div>
             <div class="zde-panel">
-                 <div class="brand rd" style="font-size:12px; justify-content:center; margin-bottom:8px;">ZDE OPERATIONS</div>
-                <div class="zde-actions">
-                    <button id="btn-attack-steal" disabled>Steal Cash</button>
-                    <button id="btn-attack-sabotage" disabled>Sabotage</button>
-                </div>
+                 <div class="brand rd" style="font-size:12px; justify-content:center; margin-bottom:8px;">ZDE PAYLOADS</div>
+                 <div id="zde-display"></div>
+                 <!-- The old z-actions div is removed -->
             </div>
         </div>
         <div id="unallocated-pool" class="dropzone" data-role="unallocated">
@@ -241,15 +260,15 @@
             </div>
             <div id="research-dropzone" class="dropzone" data-role="research">
                  <div class="tile__head" style="margin-bottom:0">
-                    <div class="brand mg">RESEARCH</div>
+                    <div class="brand mg">GENERAL RESEARCH</div>
                     <div class="pill"><b id="research-count">0</b></div>
                 </div>
             </div>
-            <div id="dev-dropzone" class="dropzone" data-role="dev">
-                 <div class="tile__head" style="margin-bottom:0">
-                    <div class="brand am">DEVELOP</div>
-                    <div class="pill"><b id="dev-count">0</b></div>
-                </div>
+            <div id="research-allocation-dropzones" class="saas-dropzones">
+                <!-- Research SaaS category dropzones will be dynamically inserted here -->
+            </div>
+            <div id="dev-allocation-dropzones" class="saas-dropzones">
+                <!-- Dev SaaS category dropzones will be dynamically inserted here -->
             </div>
         </div>
     </div>
@@ -262,6 +281,10 @@
         </div>
         <div class="gridwrap">
             <svg id="ai-hexsvg" width="100%" height="320"></svg>
+        </div>
+        <div class="ai-attack-dropzones">
+            <div id="ai-dropzone-steal" class="dropzone" data-action="steal">Steal Cash</div>
+            <div id="ai-dropzone-sabotage" class="dropzone" data-action="sabotage">Sabotage</div>
         </div>
         <div class="legend">
             <span class="key cy"><span class="dot" style="background:var(--cy)"></span>SaaS</span>
@@ -458,8 +481,6 @@ const E = {
         brand: document.getElementById('ai-brand'),
     },
     buttons: {
-        attackSteal: document.getElementById('btn-attack-steal'),
-        attackSabotage: document.getElementById('btn-attack-sabotage'),
         save: document.getElementById('btn-save'),
         load: document.getElementById('btn-load'),
         help: document.getElementById('btn-help'),
@@ -470,7 +491,6 @@ const E = {
     serverMgmt: {
         unallocatedCount: document.getElementById('unallocated-count'),
         researchCount: document.getElementById('research-count'),
-        devCount: document.getElementById('dev-count'),
         pool: document.getElementById('unallocated-pool'),
     },
     charts: {
@@ -507,7 +527,9 @@ function renderHexGrid(entity, svgEl) {
         const hex = document.createElementNS('http://www.w3.org/2000/svg', 'polygon');
         hex.setAttribute('points', hexPoints(cx, cy));
         hex.setAttribute('class','hex');
-        const fill_role = SAAS_CATEGORIES.includes(role) ? 'saas' : role;
+        let fill_role = SAAS_CATEGORIES.includes(role) ? 'saas' : role;
+        if (role.startsWith('dev-')) fill_role = 'dev';
+        if (role.startsWith('research-')) fill_role = 'research';
         hex.setAttribute('fill', ROLE_FILL[fill_role] || '#333');
         hex.setAttribute('stroke', '#2a334a');
         hex.setAttribute('stroke-width', 1.25);
@@ -539,12 +561,24 @@ function generateSyndicateName() {
     return `${prefix}${core} ${suffix}`;
 }
 
+function generateZdeName() {
+    const prefix = NAME_PREFIX[Math.floor(Math.random() * NAME_PREFIX.length)];
+    const core = NAME_CORE[Math.floor(Math.random() * NAME_CORE.length)];
+    return `${prefix}-${core}`;
+}
+
 function getTotalServers(entity) {
     return Object.values(entity.roles).reduce((a, b) => a + b, 0) + entity.unallocatedServers;
 }
 
 function getSaasServers(entity) {
     return SAAS_CATEGORIES.reduce((total, cat) => total + (entity.roles[cat] || 0), 0);
+}
+
+function getTotalResearchServers(entity) {
+    const general = entity.roles.research || 0;
+    const specific = SAAS_CATEGORIES.reduce((total, cat) => total + (entity.roles[`research-${cat}`] || 0), 0);
+    return general + specific;
 }
 
 function updateUI() {
@@ -560,21 +594,46 @@ function updateUI() {
     E.player.totalServers.textContent = getTotalServers(gameState.player);
     E.ai.totalServers.textContent = getTotalServers(gameState.ai);
     E.ai.brand.textContent = gameState.ai.name;
-    E.player.zdeCount.textContent = gameState.player.zde;
+    E.player.zdeCount.textContent = gameState.player.zdes.length;
 
     // Server counts
     E.serverMgmt.unallocatedCount.textContent = gameState.player.unallocatedServers;
     E.serverMgmt.researchCount.textContent = gameState.player.roles.research;
-    E.serverMgmt.devCount.textContent = gameState.player.roles.dev;
 
     // Buttons
-    const hasZDE = gameState.player.zde > 0;
-    E.buttons.attackSteal.disabled = !hasZDE;
-    E.buttons.attackSabotage.disabled = !hasZDE;
+    // The old attack buttons are removed, so this is no longer needed.
 
     // Grids
     renderHexGrid(gameState.player, E.player.svg);
     renderHexGrid(gameState.ai, E.ai.svg);
+    renderZDEs();
+}
+
+function renderZDEs() {
+    const container = document.getElementById('zde-display');
+    container.innerHTML = '';
+    gameState.player.zdes.forEach(zde => {
+        const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+        svg.setAttribute('class', 'zde-item');
+        svg.setAttribute('viewBox', '0 0 24 24');
+        svg.setAttribute('width', '24');
+        svg.setAttribute('height', '24');
+        svg.dataset.id = zde.id;
+
+        const triangle = document.createElementNS("http://www.w3.org/2000/svg", "polygon");
+        triangle.setAttribute('points', '12,2 22,20 2,20');
+        svg.appendChild(triangle);
+
+        svg.addEventListener('mousemove', (e) => {
+            E.tooltip.style.left = e.clientX+'px';
+            E.tooltip.style.top = e.clientY+'px';
+            E.tooltip.innerHTML = zde.name;
+            E.tooltip.style.opacity = 1;
+        });
+        svg.addEventListener('mouseleave', () => E.tooltip.style.opacity = 0);
+
+        container.appendChild(svg);
+    });
 }
 
 function runAI() {
@@ -582,8 +641,8 @@ function runAI() {
     const player = gameState.player;
 
     // RULE 1: Attack if possible and player has money
-    if (ai.zde > 0 && player.money > 0) {
-        ai.zde--;
+    if (ai.zdes.length > 0 && player.money > 0) {
+        ai.zdes.pop(); // Use one ZDE
         const damage = Math.min(ZDE_ATTACK_POWER, player.money);
         player.money -= damage;
         logMessage(`!!! AI ATTACK: ${ai.name} launched a ZDE, draining $${Math.floor(damage)}.`);
@@ -599,15 +658,35 @@ function runAI() {
 
     // RULE 3: Allocate servers
     if (ai.unallocatedServers > 0) {
-        const saasServers = getSaasServers(ai);
-        if (saasServers < ai.roles.research * 4) {
-            // Allocate to a random SaaS category
+        const choice = Math.random();
+
+        if (choice < 0.5) { // 50% chance to allocate to SaaS
             const randomCategory = SAAS_CATEGORIES[Math.floor(Math.random() * SAAS_CATEGORIES.length)];
             ai.roles[randomCategory] += ai.unallocatedServers;
-            logMessage(`AI (${ai.name}) allocated servers to ${randomCategory}.`);
-        } else {
-            ai.roles.research += ai.unallocatedServers;
-            logMessage(`AI (${ai.name}) allocated servers to Research.`);
+            logMessage(`AI (${ai.name}) allocated ${ai.unallocatedServers} servers to ${randomCategory}.`);
+        } else if (choice < 0.8) { // 30% chance to allocate to Research
+            // 50% of research allocation goes to defense
+            const existingSaaS = SAAS_CATEGORIES.filter(cat => ai.roles[cat] > 0);
+            if (Math.random() < 0.5 && existingSaaS.length > 0) {
+                const catToDefend = existingSaaS[Math.floor(Math.random() * existingSaaS.length)];
+                ai.roles[`research-${catToDefend}`] += ai.unallocatedServers;
+                logMessage(`AI (${ai.name}) allocated ${ai.unallocatedServers} servers to defend ${catToDefend}.`);
+            } else {
+                ai.roles.research += ai.unallocatedServers;
+                logMessage(`AI (${ai.name}) allocated ${ai.unallocatedServers} servers to General Research.`);
+            }
+        } else { // 20% chance to allocate to Development
+            const existingSaaS = SAAS_CATEGORIES.filter(cat => ai.roles[cat] > 0);
+            if (existingSaaS.length > 0) {
+                const catToDevelop = existingSaaS[Math.floor(Math.random() * existingSaaS.length)];
+                ai.roles[`dev-${catToDevelop}`] += ai.unallocatedServers;
+                logMessage(`AI (${ai.name}) allocated ${ai.unallocatedServers} servers to develop ${catToDevelop}.`);
+            } else {
+                // Fallback to SaaS
+                const randomCategory = SAAS_CATEGORIES[Math.floor(Math.random() * SAAS_CATEGORIES.length)];
+                ai.roles[randomCategory] += ai.unallocatedServers;
+                logMessage(`AI (${ai.name}) allocated ${ai.unallocatedServers} servers to ${randomCategory}.`);
+            }
         }
         ai.unallocatedServers = 0;
     }
@@ -616,7 +695,42 @@ function runAI() {
 function gameTick() {
     gameState.tick++;
 
-    // 1. Market Share & Revenue
+    // 0. Process Sabotage Effects
+    ['player', 'ai'].forEach(entityType => {
+        const entity = gameState[entityType];
+        SAAS_CATEGORIES.forEach(cat => {
+            if (entity.sabotageEffect[cat] > 0) {
+                const defenseServers = entity.roles[`research-${cat}`] || 0;
+                const sabotagePower = defenseServers > 0 ? 0.6 : 0.3; // Defended vs. Undefended
+                gameState.market[cat][`${entityType}Efficiency`] = sabotagePower;
+                entity.sabotageEffect[cat]--;
+            } else if (entity.sabotageEffect[cat] === 0) {
+                gameState.market[cat][`${entityType}Efficiency`] = 1.0; // Restore efficiency
+                delete entity.sabotageEffect[cat];
+            }
+        });
+    });
+
+    // 1. Process Development
+    SAAS_CATEGORIES.forEach(cat => {
+        // Player
+        const playerDevCount = gameState.player.roles[`dev-${cat}`] || 0;
+        if (playerDevCount > 0) {
+            let currentEff = gameState.market[cat].playerEfficiency;
+            currentEff += playerDevCount * 0.005; // Small boost per server
+            gameState.market[cat].playerEfficiency = Math.min(2.0, currentEff); // Cap at 200%
+        }
+
+        // AI
+        const aiDevCount = gameState.ai.roles[`dev-${cat}`] || 0;
+        if (aiDevCount > 0) {
+            let currentEff = gameState.market[cat].aiEfficiency;
+            currentEff += aiDevCount * 0.005;
+            gameState.market[cat].aiEfficiency = Math.min(2.0, currentEff);
+        }
+    });
+
+    // 2. Market Share & Revenue
     let totalPlayerIncome = PASSIVE_INCOME;
     let totalAiIncome = PASSIVE_INCOME;
 
@@ -634,8 +748,8 @@ function gameTick() {
             market.aiShare = 0;
         }
 
-        totalPlayerIncome += market.playerShare * (market.player * SAAS_INCOME);
-        totalAiIncome += market.aiShare * (market.ai * SAAS_INCOME);
+        totalPlayerIncome += market.playerShare * (market.player * SAAS_INCOME * market.playerEfficiency);
+        totalAiIncome += market.aiShare * (market.ai * SAAS_INCOME * market.aiEfficiency);
     });
 
     gameState.player.money += totalPlayerIncome;
@@ -648,15 +762,25 @@ function gameTick() {
 
 
     // 2. ZDE Discovery
-    for (let i = 0; i < gameState.player.roles.research; i++) {
+    const playerResearchTotal = getTotalResearchServers(gameState.player);
+    for (let i = 0; i < playerResearchTotal; i++) {
         if (Math.random() < ZDE_DISCOVERY_CHANCE) {
-            gameState.player.zde++;
-            logMessage("Player discovered a Zero-Day Exploit!");
+            const newZde = {
+                id: `zde-${Date.now()}-${Math.random()}`,
+                name: generateZdeName()
+            };
+            gameState.player.zdes.push(newZde);
+            logMessage(`Player discovered a Zero-Day Exploit: ${newZde.name}!`);
         }
     }
-    for (let i = 0; i < gameState.ai.roles.research; i++) {
+    const aiResearchTotal = getTotalResearchServers(gameState.ai);
+    for (let i = 0; i < aiResearchTotal; i++) {
         if (Math.random() < ZDE_DISCOVERY_CHANCE) {
-            gameState.ai.zde++;
+            const newZde = {
+                id: `zde-ai-${Date.now()}-${Math.random()}`,
+                name: generateZdeName()
+            };
+            gameState.ai.zdes.push(newZde);
             logMessage(`AI (${gameState.ai.name}) discovered a Zero-Day Exploit!`);
         }
     }
@@ -693,9 +817,12 @@ function initGame() {
     if (gameLoopInterval) clearInterval(gameLoopInterval);
 
     const initialRoles = {};
-    SAAS_CATEGORIES.forEach(cat => initialRoles[cat] = 0);
+    SAAS_CATEGORIES.forEach(cat => {
+        initialRoles[cat] = 0;
+        initialRoles[`dev-${cat}`] = 0;
+        initialRoles[`research-${cat}`] = 0;
+    });
     initialRoles.research = 1;
-    initialRoles.dev = 0;
 
     const playerRoles = {...initialRoles};
     playerRoles[SAAS_CATEGORIES[0]] = 2;
@@ -704,8 +831,8 @@ function initGame() {
     aiRoles[SAAS_CATEGORIES[1]] = 3;
 
     gameState = {
-        player: { money: 10000, roles: playerRoles, zde: 0, unallocatedServers: 2, cashFlowHistory: [] },
-        ai: { money: 10000, roles: aiRoles, zde: 0, unallocatedServers: 1, name: generateSyndicateName(), cashFlowHistory: [] },
+        player: { money: 10000, roles: playerRoles, zdes: [], unallocatedServers: 2, cashFlowHistory: [], sabotageEffect: {} },
+        ai: { money: 10000, roles: aiRoles, zdes: [], unallocatedServers: 1, name: generateSyndicateName(), cashFlowHistory: [], sabotageEffect: {} },
         tick: 0,
         chartLabels: [],
         market: {},
@@ -718,7 +845,9 @@ function initGame() {
             ai: 0,
             total: 0,
             playerShare: 0,
-            aiShare: 0
+            aiShare: 0,
+            playerEfficiency: 1.0,
+            aiEfficiency: 1.0,
         };
         gameState.marketShareHistory[cat] = [];
     });
@@ -773,24 +902,6 @@ function loadGame() {
 
 
 /* ---------- EVENT LISTENERS ---------- */
-E.buttons.attackSteal.addEventListener('click', () => {
-    if (gameState.player.zde > 0) {
-        gameState.player.zde--;
-        const damage = Math.min(ZDE_ATTACK_POWER, gameState.ai.money);
-        gameState.ai.money -= damage;
-        logMessage(`Attack successful! You stole $${Math.floor(damage)} from ${gameState.ai.name}.`);
-        updateUI();
-    }
-});
-
-E.buttons.attackSabotage.addEventListener('click', () => {
-    if (gameState.player.zde > 0) {
-        gameState.player.zde--;
-        logMessage(`Sabotage attack launched against ${gameState.ai.name}! (Effect not yet implemented).`);
-        updateUI();
-    }
-});
-
 E.buttons.save.addEventListener('click', saveGame);
 E.buttons.load.addEventListener('click', loadGame);
 E.buttons.help.addEventListener('click', () => { E.helpModal.style.display = 'flex'; });
@@ -827,6 +938,46 @@ function initDragAndDrop() {
     const onDropzoneLeave = ({ target }) => target.classList.remove('can-drop');
 
     interact('.server-market .server-draggable').draggable({ ...dragListeners });
+    interact('.zde-item').draggable({ ...dragListeners });
+
+    const zdeDropzoneOptions = {
+        ondragenter: onDropzoneEnter,
+        ondragleave: onDropzoneLeave,
+        ondrop: function (event) {
+            const draggable = event.relatedTarget;
+            const dropzone = event.target;
+            const zdeId = draggable.dataset.id;
+            const action = dropzone.dataset.action;
+
+            const zdeIndex = gameState.player.zdes.findIndex(z => z.id === zdeId);
+            if (zdeIndex === -1) return;
+
+            const zde = gameState.player.zdes[zdeIndex];
+            gameState.player.zdes.splice(zdeIndex, 1);
+
+            if (action === 'steal') {
+                const damage = Math.min(ZDE_ATTACK_POWER, gameState.ai.money);
+                gameState.ai.money -= damage;
+                gameState.player.money += damage;
+                logMessage(`Attack successful with ${zde.name}! You stole $${Math.floor(damage)} from ${gameState.ai.name}.`);
+            } else if (action === 'sabotage') {
+                const targetableCategories = SAAS_CATEGORIES.filter(cat => gameState.ai.roles[cat] > 0);
+                if (targetableCategories.length > 0) {
+                    const targetCategory = targetableCategories[Math.floor(Math.random() * targetableCategories.length)];
+                    gameState.ai.sabotageEffect[targetCategory] = 10; // Sabotage for 10 ticks
+                    logMessage(`Sabotage successful with ${zde.name}! ${gameState.ai.name}'s ${targetCategory} efficiency is crippled.`);
+                } else {
+                    logMessage(`Sabotage with ${zde.name} failed. No active AI SaaS products to target.`);
+                }
+            }
+
+            updateUI();
+            dropzone.classList.remove('can-drop');
+        }
+    };
+
+    interact('#ai-dropzone-steal').dropzone(zdeDropzoneOptions);
+    interact('#ai-dropzone-sabotage').dropzone(zdeDropzoneOptions);
 
     const dropzoneOptions = {
         ondragenter: onDropzoneEnter,
@@ -874,9 +1025,11 @@ function initDragAndDrop() {
 
     interact('#unallocated-pool').dropzone(dropzoneOptions);
     interact('#research-dropzone').dropzone(dropzoneOptions);
-    interact('#dev-dropzone').dropzone(dropzoneOptions);
     SAAS_CATEGORIES.forEach(cat => {
-        interact(`#${cat.replace(/\s+/g, '-')}-dropzone`).dropzone(dropzoneOptions);
+        const catId = cat.replace(/\s+/g, '-');
+        interact(`#${catId}-dropzone`).dropzone(dropzoneOptions);
+        interact(`#dev-${catId}-dropzone`).dropzone(dropzoneOptions);
+        interact(`#research-${catId}-dropzone`).dropzone(dropzoneOptions);
     });
 }
 
@@ -898,36 +1051,77 @@ function createServerElement(origin, id) {
 function renderServers() {
     document.querySelectorAll('.player-server').forEach(el => el.remove());
     const saasContainer = document.getElementById('saas-category-dropzones');
+    const devContainer = document.getElementById('dev-allocation-dropzones');
+    const researchContainer = document.getElementById('research-allocation-dropzones');
     saasContainer.innerHTML = '';
+    devContainer.innerHTML = '';
+    researchContainer.innerHTML = '';
 
     SAAS_CATEGORIES.forEach(cat => {
-        const dropzone = document.createElement('div');
-        dropzone.id = `${cat.replace(/\s+/g, '-')}-dropzone`;
-        dropzone.className = 'dropzone';
-        dropzone.dataset.role = cat;
-        dropzone.innerHTML = `
+        const catId = cat.replace(/\s+/g, '-');
+
+        // SaaS Dropzones
+        const saasDropzone = document.createElement('div');
+        saasDropzone.id = `${catId}-dropzone`;
+        saasDropzone.className = 'dropzone';
+        saasDropzone.dataset.role = cat;
+        saasDropzone.innerHTML = `
             <div class="tile__head" style="margin-bottom:0">
                 <div class="brand cy">${cat}</div>
                 <div class="pill"><b>${gameState.player.roles[cat] || 0}</b></div>
             </div>
         `;
         for (let i = 0; i < (gameState.player.roles[cat] || 0); i++) {
-            dropzone.appendChild(createServerElement(cat, i));
+            saasDropzone.appendChild(createServerElement(cat, i));
         }
-        saasContainer.appendChild(dropzone);
+        saasContainer.appendChild(saasDropzone);
+
+        // Dev Dropzones
+        const devDropzone = document.createElement('div');
+        const devRole = `dev-${cat}`;
+        devDropzone.id = `dev-${catId}-dropzone`;
+        devDropzone.className = 'dropzone';
+        devDropzone.dataset.role = devRole;
+        devDropzone.innerHTML = `
+            <div class="tile__head" style="margin-bottom:0">
+                <div class="brand am">DEV: ${cat}</div>
+                <div class="pill"><b>${gameState.player.roles[devRole] || 0}</b></div>
+            </div>
+        `;
+        for (let i = 0; i < (gameState.player.roles[devRole] || 0); i++) {
+            devDropzone.appendChild(createServerElement(devRole, i));
+        }
+        devContainer.appendChild(devDropzone);
+
+        // Research Dropzones
+        const researchDropzone = document.createElement('div');
+        const researchRole = `research-${cat}`;
+        researchDropzone.id = `research-${catId}-dropzone`;
+        researchDropzone.className = 'dropzone';
+        researchDropzone.dataset.role = researchRole;
+        researchDropzone.innerHTML = `
+            <div class="tile__head" style="margin-bottom:0">
+                <div class="brand mg">DEFENSE: ${cat}</div>
+                <div class="pill"><b>${gameState.player.roles[researchRole] || 0}</b></div>
+            </div>
+        `;
+        for (let i = 0; i < (gameState.player.roles[researchRole] || 0); i++) {
+            researchDropzone.appendChild(createServerElement(researchRole, i));
+        }
+        researchContainer.appendChild(researchDropzone);
     });
+
 
     const unallocatedPool = document.getElementById('unallocated-pool');
     for (let i = 0; i < gameState.player.unallocatedServers; i++) {
         unallocatedPool.appendChild(createServerElement('unallocated', i));
     }
 
-    ['research', 'dev'].forEach(role => {
-        const dropzone = document.getElementById(`${role}-dropzone`);
-        for (let i = 0; i < gameState.player.roles[role]; i++) {
-            dropzone.appendChild(createServerElement(role, i));
-        }
-    });
+    // research dropzone
+    const researchDropzone = document.getElementById('research-dropzone');
+    for (let i = 0; i < gameState.player.roles['research']; i++) {
+        researchDropzone.appendChild(createServerElement('research', i));
+    }
 }
 
 
